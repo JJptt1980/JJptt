@@ -1397,14 +1397,11 @@ test('視窗風格 KKMan: 連線時間 counts from the connection, tabs are the 
     assert.strictEqual(JJFrame.connectedAt, 0, 'the clock keeps running after a disconnect');
   } finally { Date.now = realNow; }
 });
-test('視窗風格 KKMan: the block letters spell JJptt in five colours', function() {
-  var b = JJFrame.blockCells('JJptt');
-  assert.strictEqual(b.w, 29);
-  assert.strictEqual(b.h, 9);
-  var letters = {};
-  b.cells.forEach(function(c) { letters[c.c] = true; assert.ok(c.x >= 0 && c.x < b.w && c.y >= 0 && c.y < b.h); });
-  assert.deepStrictEqual(Object.keys(letters).length, 5);
-  assert.ok(JJFrame.BLOCK_COLORS.length >= 5);
+test('視窗風格 KKMan: the welcome screen says 花魁異色館 in big letters, rules below', function() {
+  assert.strictEqual(JJFrame.KK_SPLASH.title, '花魁異色館', 'the owner asked for 花魁異色館');
+  var html = JJFrame.kkSplashHtml();
+  ['jjf-name', 'jjf-code', 'jjf-rules', '【花魁異色館】'].forEach(function(c) { assert.ok(html.indexOf(c) >= 0, c + ' missing'); });
+  JJFrame.KK_SPLASH.rules.forEach(function(l, i) { assert.ok(html.indexOf('<b>' + i + '.</b><span>' + l) >= 0); });
 });
 test('視窗風格: the welcome screen goes on the first data, at most once', function() {
   var calls = [];

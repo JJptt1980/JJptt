@@ -359,50 +359,60 @@ JJFrame.drawWord = function(c, sub) {
   x.putImageData(out, 0, 0);
 };
 
-// KKMan-like welcome screen: 「JJptt」 in big bevelled blocks, one colour a
-// letter, like the block letters on the BBS welcome screens of the time,
-// with rows of coloured half blocks above and below.
-JJFrame.BLOCK_FONT = {
-  J: ['#####', '...#.', '...#.', '...#.', '#..#.', '#..#.', '.##..', '.....', '.....'],
-  p: ['.....', '.....', '####.', '#...#', '#...#', '#...#', '####.', '#....', '#....'],
-  t: ['..#..', '..#..', '#####', '..#..', '..#..', '..#.#', '...#.', '.....', '.....']
-};
-JJFrame.BLOCK_COLORS = [['#ff5a4a', '#c81e14', '#ffb0a8'], ['#ff9a1e', '#c05a00', '#ffd49a'],
-  ['#ffd92a', '#b89000', '#fff2a0'], ['#4cd04a', '#1a8a1a', '#b4f4b0'], ['#3a8cff', '#1448b8', '#a8ccff']];
-
-// The cells of a word in the block font: [{x, y, c (letter number)}], and its size.
-JJFrame.blockCells = function(word) {
-  var F = JJFrame.BLOCK_FONT, out = [], x0 = 0;
-  for (var n = 0; n < word.length; n++) {
-    var g = F[word[n]];
-    for (var y = 0; y < g.length; y++) for (var x = 0; x < g[y].length; x++) {
-      if (g[y][x] === '#') out.push({ x: x0 + x, y: y, c: n });
-    }
-    x0 += 6;
-  }
-  return { cells: out, w: x0 - 1, h: 9 };
+// KKMan-like welcome screen: like a BBS station's entry screen of the time.
+// The station name in big yellow pixel letters (a font drawn small and shown
+// with big square pixels), a dim code above, the station's rules below and a
+// blue bar at the bottom that says we are connecting.
+JJFrame.KK_SPLASH = {
+  code: 'JJ 01',
+  title: '花魁異色館',
+  tags: ['懷舊連線', '看穿風向'],
+  head: '【花魁異色館】',
+  rules: ['本站為懷舊連線館，文章皆來自批踢踢，站方不保證每則推文都是真心話。',
+    '本站不提供帶風向、灌票、養帳號等服務。',
+    '同一 IP 連推、秒推、罐頭推文，一律亮燈示眾。',
+    '本站為公開站台，看完請自行判斷，站方不負責幫你吵架。']
 };
 
-JJFrame.drawBlocks = function(c) {
-  var S = 16, pad = 2, b = JJFrame.blockCells('JJptt'), C = JJFrame.BLOCK_COLORS;
-  var cols = b.w + pad * 2, rows = b.h + pad * 2 + 2;
-  c.width = cols * S; c.height = rows * S;
-  var x = c.getContext('2d');
-  x.fillStyle = '#000';
-  x.fillRect(0, 0, c.width, c.height);
-  // half-block stripes, top and bottom (▄▀ in the five colours)
-  for (var i = 0; i < cols; i++) {
-    var k = C[Math.floor(i / 2) % C.length];
-    x.fillStyle = k[0]; x.fillRect(i * S, S / 2, S, S / 2);
-    x.fillStyle = C[(Math.floor(i / 2) + 2) % C.length][1]; x.fillRect(i * S, (rows - 1) * S, S, S / 2);
-  }
-  b.cells.forEach(function(e) {
-    var px = (e.x + pad) * S, py = (e.y + pad + 1) * S, k = C[e.c % C.length];
-    x.fillStyle = '#202020'; x.fillRect(px + 4, py + 4, S, S);    // shadow
-    x.fillStyle = k[1]; x.fillRect(px, py, S, S);                 // dark edge
-    x.fillStyle = k[2]; x.fillRect(px, py, S - 3, S - 3);         // lit edge
-    x.fillStyle = k[0]; x.fillRect(px + 3, py + 3, S - 6, S - 6); // face
+// Draws text as square pixels: each character rendered at px pixels, the
+// dots kept or dropped by a threshold, and each dot shown cell x cell.
+JJFrame.drawPixelText = function(c, text, px, cell, color, font) {
+  var gap = Math.max(1, Math.round(px / 8)), chars = text.split('');
+  var t = document.createElement('canvas');
+  t.width = chars.length * (px + gap); t.height = px + 2;
+  var y = t.getContext('2d');
+  y.fillStyle = '#fff';
+  y.textBaseline = 'top';
+  y.font = font || ('bold ' + px + 'px "PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif');
+  var x0 = 0;
+  chars.forEach(function(ch) {
+    var w = y.measureText(ch).width;
+    y.fillText(ch, x0 + Math.max(0, (px - w) / 2), 1);
+    x0 += (w > px * 0.7 ? px : Math.ceil(w)) + gap;
   });
+  var W = Math.min(t.width, x0 - gap), H = t.height;
+  var m = y.getImageData(0, 0, t.width, H).data;
+  c.width = W * cell; c.height = H * cell;
+  var x = c.getContext('2d');
+  x.fillStyle = color;
+  for (var j = 0; j < H; j++) for (var i = 0; i < W; i++) {
+    if (m[(j * t.width + i) * 4 + 3] > 100) x.fillRect(i * cell, j * cell, cell, cell);
+  }
+};
+
+JJFrame.kkSplashHtml = function() {
+  var K = JJFrame.KK_SPLASH;
+  return '<div class="jjf-art"><canvas class="jjf-code"></canvas>' +
+    '<div class="jjf-tags">' + K.tags.map(function(t) { return '<span>' + t + '</span>'; }).join('') + '</div>' +
+    '<canvas class="jjf-name"></canvas>' +
+    '<div class="jjf-rules"><div class="jjf-head">' + K.head + '</div>' +
+    K.rules.map(function(t, i) { return '<p><b>' + i + '.</b><span>' + t + '</span></p>'; }).join('') + '</div></div>';
+};
+
+JJFrame.drawKkSplash = function(sp) {
+  var K = JJFrame.KK_SPLASH;
+  JJFrame.drawPixelText(sp.querySelector('.jjf-code'), K.code, 13, 5, '#a8a800', 'bold 13px Arial,Helvetica,sans-serif');
+  JJFrame.drawPixelText(sp.querySelector('.jjf-name'), K.title, 16, 7, '#ffff40');
 };
 
 JJFrame.showSplash = function() {
@@ -415,7 +425,7 @@ JJFrame.showSplash = function() {
   var kk = JJFrame.style === 'kkman';
   if (kk) sp.className = 'jjf-splash-kk';
   sp.innerHTML = (kk ?
-    '<div class="jjf-art"><canvas class="jjf-blocks"></canvas><div class="jjf-sub"></div></div>' :
+    JJFrame.kkSplashHtml() :
     '<div class="jjf-art"><canvas class="jjf-globe" width="132" height="132"></canvas>' +
     '<canvas class="jjf-word" width="360" height="96"></canvas></div>') + '<div class="jjf-conn"></div>';
   sp.querySelector('.jjf-conn').textContent = msg;
@@ -425,8 +435,7 @@ JJFrame.showSplash = function() {
   var motto = (typeof i18n === 'function' && i18n('frame_motto')) || '看 PTT，也看穿帶風向';
   try {
     if (kk) {
-      sp.querySelector('.jjf-sub').textContent = motto;
-      JJFrame.drawBlocks(sp.querySelector('.jjf-blocks'));
+      JJFrame.drawKkSplash(sp);
     } else {
       JJFrame.drawGlobe(sp.querySelector('.jjf-globe'));
       JJFrame.drawWord(sp.querySelector('.jjf-word'), motto);

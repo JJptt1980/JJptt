@@ -1575,10 +1575,21 @@ body.jj-frame-kkman { background-color: #000; }
 .jjf-kkman .jjf-status .jjf-led { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #555; background: radial-gradient(circle at 35% 35%, #ddd, #888); }
 .jjf-kkman .jjf-status .jjf-led.on { border-color: #1a6a1a; background: radial-gradient(circle at 35% 35%, #c8ffc0, #2fae22); }
 
-/* KKMan-like welcome screen: block letters */
-#jjFrameSplash.jjf-splash-kk .jjf-art { width: 660px; height: auto; text-align: center; }
-#jjFrameSplash.jjf-splash-kk canvas { position: static; display: block; width: 660px; height: 300px; }
-#jjFrameSplash.jjf-splash-kk .jjf-sub { margin-top: 6px; color: #ffff55; font: bold 22px "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif; letter-spacing: 4px; }
+/* KKMan-like welcome screen: a BBS station's entry screen */
+#jjFrameSplash.jjf-splash-kk .jjf-art {
+  width: 660px; height: auto; display: flex; flex-direction: column; align-items: center;
+  font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+}
+#jjFrameSplash.jjf-splash-kk canvas { position: static; display: block; }
+#jjFrameSplash.jjf-splash-kk .jjf-tags { display: flex; gap: 70px; margin: 22px 0 26px; color: #a8a8a8; font-size: 13px; letter-spacing: 3px; }
+#jjFrameSplash.jjf-splash-kk .jjf-rules { align-self: stretch; margin-top: 30px; color: #e0e0e0; font-size: 14px; line-height: 1.6; text-align: left; }
+#jjFrameSplash.jjf-splash-kk .jjf-head { color: #ff5555; margin-bottom: 8px; }
+#jjFrameSplash.jjf-splash-kk .jjf-rules p { margin: 0 0 2px 16px; display: flex; gap: 10px; }
+#jjFrameSplash.jjf-splash-kk .jjf-rules b { font-weight: normal; flex: 0 0 auto; }
+#jjFrameSplash.jjf-splash-kk .jjf-conn {
+  left: 10%; right: 10%; bottom: 18px; padding: 2px 0; background: #0000a8; color: #fff; letter-spacing: 3px;
+  font: bold 14px "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+}
 
 /* ---- JJptt on phones (Android app: body.jj-mobile, js/mobile.js) ---- */
 /* No terminal: the app is .jjm (bar on top, one screen at a time). */
