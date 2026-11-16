@@ -286,10 +286,10 @@ locale.en_US = {
     "message": "Plain (all black)"
   },
   "options_frameStyleNetterm": {
-    "message": "NetTerm-like (retro)"
+    "message": "NetTerm-like"
   },
   "options_frameStyleKkman": {
-    "message": "Kokoren (retro)"
+    "message": "Kokoren-like"
   },
   "frame_wip": {
     "message": "Under construction"

@@ -286,10 +286,10 @@ locale.zh_TW = {
     "message": "原本（全黑）"
   },
   "options_frameStyleNetterm": {
-    "message": "仿 NetTerm（懷舊）"
+    "message": "仿 NetTerm"
   },
   "options_frameStyleKkman": {
-    "message": "柯柯人（懷舊）"
+    "message": "仿 柯柯人"
   },
   "frame_wip": {
     "message": "施工中"
