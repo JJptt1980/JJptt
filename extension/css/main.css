@@ -1629,6 +1629,15 @@ body.jj-mobile .jjm {
 .jjm-bar.jjm-noback .jjm-title { padding-left: 10px; }
 /* fitBar: still too long at 12px -> two lines */
 .jjm-title.jjm-title-2 { white-space: normal; line-height: 1.15; max-height: 2.3em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: keep-all; }
+/* board / article: the title floats over the whole bar after the back button, see-through,
+   and lets taps through to the buttons under it */
+.jjm-bar { position: relative; }
+.jjm-bar.jjm-float .jjm-title {
+  position: absolute; left: calc(56px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right));
+  top: calc(env(safe-area-inset-top) + 28px); transform: translateY(-50%); line-height: 1.2;
+  opacity: .5; pointer-events: none; z-index: 1;
+}
+.jjm-bar.jjm-float .jjm-actions { margin-left: auto; }
 .jjm .jjm-icon {
   width: 48px; height: 48px; border-radius: var(--r-pill); font-size: var(--f-2xl); text-align: center; line-height: 48px; color: var(--text);
 }
@@ -1978,6 +1987,8 @@ body.jj-mobile { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   border: 1px solid var(--line); background: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .jjm .jjm-verbtn-new { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); font-weight: 700; }
+.jjm .jjm-verbtn.jjm-verlogo { border: 0; padding: 4px 6px; line-height: 0; }
+.jjm .jjm-verlogo .jjm-logo { margin: 0; vertical-align: 0; }
 
 /* 自動黑名單: why / the address / the article */
 .jjm-temp-why { font-size: var(--f-md); color: var(--text); }

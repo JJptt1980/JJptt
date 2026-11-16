@@ -293,9 +293,8 @@ JJMobile.prototype.checkUpdate = function(manual) {
   });
 };
 
-// The version and 檢查更新 sit in the home screen's top bar (no icon or
-// name: space). A short note there (檢查中…, 下载中 40%); anything longer
-// is a toast. Green 更新到 0.0.N when there is a newer one.
+// The home screen's top bar: the JJptt icon (tap: 檢查更新), a short note
+// (檢查中…, 下载中 40%) or a green 「可更新」; anything longer is a toast.
 JJMobile.prototype.setUpdateRow = function(note) {
   var top = this.stack[this.stack.length - 1];
   var onHome = top && top.type === 'home';
@@ -314,18 +313,18 @@ JJMobile.prototype.refreshVersion = function() {
   var self = this;
   var top = this.stack[this.stack.length - 1];
   if (!top || top.type !== 'home' || !this.titleEl) return;
-  var text = this.updateNote ||
-    (this.updateAvailable ? '更新到 ' + JJMobile.version(this.update.run, this.update.version) +
-      (this.update.channel === 'test' && JJMobile.wantsTest() ? ' 測試版' : '') :
-      JJMobile.version(this.myBuild(), this.myVersion()) + '・檢查更新');
-  var b = JJMobile.button('jjm-verbtn' + (this.updateAvailable ? ' jjm-verbtn-new' : ''), text, function() {
+  // nothing to say: the JJptt icon (tap: 檢查更新); a newer one: 「可更新」
+  var mine = JJMobile.version(this.myBuild(), this.myVersion());
+  var text = this.updateNote || (this.updateAvailable ? '可更新' : '');
+  var b = JJMobile.button('jjm-verbtn' + (this.updateAvailable ? ' jjm-verbtn-new' : '') + (text ? '' : ' jjm-verlogo'), text, function() {
     if (self.updating) return;
     if (self.updateAvailable) self.installUpdate();
     else self.checkUpdate(true);
   });
-  b.setAttribute('data-full', text);
-  // too narrow (a long account name, big 介面文字): just the version
-  if (!this.updateNote && !this.updateAvailable) b.setAttribute('data-short', JJMobile.version(this.myBuild(), this.myVersion()));
+  if (text) b.setAttribute('data-full', text);
+  else b.innerHTML = '<img class="jjm-logo" src="app-icon.png" alt="">';
+  b.setAttribute('aria-label', this.updateAvailable ?
+    '更新到 ' + JJMobile.version(this.update.run, this.update.version) : text || mine + '・檢查更新');
   this.titleEl.innerHTML = '';
   this.titleEl.appendChild(b);
   this.fitBar();
@@ -589,6 +588,8 @@ JJMobile.prototype.setBar = function(screen) {
   var hasBack = this.stack.length > 1;
   this.backBtn.style.display = hasBack ? '' : 'none';
   this.bar.classList.toggle('jjm-noback', !hasBack);
+  // board / article: the title floats over the buttons, see-through, and taps go to the buttons under it
+  this.bar.classList.toggle('jjm-float', screen.type === 'board' || screen.type === 'article');
   this.titleEl.textContent = screen.title || 'JJptt';
   if (screen.type === 'home') this.refreshVersion();  // the version, not the name
   this.actions.innerHTML = '';
