@@ -906,7 +906,11 @@ function fakePtt(script) {
     buf: { rows: 24, cols: 80, getRowText: function(r) { return script[at][0].split('\n')[r] || ''; } },
     conn: {
       isConnected: false,
-      send: function(k) { typed.push(k); move(k); },
+      send: function(k) {
+        // like the app's port (btoa): only bytes; text goes through convSend
+        if (/[^\x00-\xff]/.test(k)) throw new Error("Failed to execute 'btoa': outside of the Latin1 range");
+        typed.push(k); move(k);
+      },
       convSend: function(k) { typed.push(k); move(k); },
       disconnect: function() { this.isConnected = false; }
     },

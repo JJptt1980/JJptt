@@ -482,7 +482,11 @@ JJPtt.prototype.answerUntil = function(cases, answer, ms, failMessage) {
       var keys = answer(k);
       if (keys === null) return k;
       if (k !== 'hurdle' && k !== 'sign') answered[k] = true;
-      if (keys) self.send(keys);
+      // an answer with Chinese in it (a title) is typed: converted to Big5, not sent as it is
+      if (keys) {
+        if (/[^\x00-\x7f]/.test(keys)) self.type(keys);
+        else self.send(keys);
+      }
       return JJPtt.sleep(500).then(step);
     });
   };
