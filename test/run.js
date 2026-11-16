@@ -1224,6 +1224,31 @@ testAsync('push: s in 我的最愛 only moves the cursor onto the board -> → g
   assert.ok(f.typed.indexOf('讚\r') >= 0, JSON.stringify(f.typed));
 });
 
+testAsync('push: the list header 看板《…》 is not the answer to the text -> the 確定 question is answered', async function() {
+  var s = boardScript({ 'X': 11 });
+  s.push(['【板主:x】 看板《Test》\n作者本人, 使用 → 加註方式\n→ tester:', { '滾蛋\r': 'sending' }]);  // 11
+  s.sending = ['【板主:x】 看板《Test》\n作者本人, 使用 → 加註方式\n→ tester: 滾蛋', {}, { after: 60, to: 'sure' }];
+  s.sure = ['【板主:x】 看板《Test》\n→ tester: 滾蛋\n確定要加入嗎？ [y/N]:', { 'y\r': 8 }];
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '3', '滾蛋');
+  assert.strictEqual(f.typed[f.typed.length - 1], 'y\r', JSON.stringify(f.typed));
+});
+testAsync('board: a push line left open on the bottom is emptied and closed before s', async function() {
+  var s = LOGIN.slice(0, 4);
+  var bs = new Array(81).join('\b') + '\r';
+  s[4] = ['【板主:x】 看板《Other》\n[→]閱讀 [s]選擇看板\n作者本人, 使用 → 加註方式\n→ tester: 奢音', {}];
+  s[4][1][bs] = 'list';
+  s.list = ['【板主:x】 看板《Other》\n[→]閱讀 [s]選擇看板\n文章選讀 (y)回應(X)推文', { 's': 'prompt' }];
+  s.prompt = ['【板主:x】 看板《Other》\n請輸入看板名稱(按空白鍵自動搜尋):', { 'Test\r': 'in' }];
+  s.in = ['【板主:y】 看板《Test》 文章選讀', {}];
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await f.ptt.toBoard('Test');
+  assert.deepStrictEqual(f.typed, [bs, 's', 'Test\r']);
+});
 testAsync('board prompt: waits for 請輸入看板名稱, not the list header\'s 「選擇看板」', async function() {
   // straight from the list of another board, the prompt shows only after a while
   var s = LOGIN.slice(0, 4);

@@ -410,14 +410,32 @@ JJPtt.prototype.toArticle = function(url) {
   });
 };
 
+// A question PTT left open on the bottom line (a push's text or its
+// 確定 [y/N], the AID or board-name prompt): keys typed now would go into it.
+JJPtt.PROMPT = /\[y\/n\]|(推|噓|→)\s*\w+\s*[:：]|請輸入|文章代碼|\(AID\)|[:：]\s*$/i;
+
+// Empties and closes such a question (backspaces, then Enter: an empty push
+// or name is cancelled, Enter at [y/N] is No).
+JJPtt.prototype.clearPrompt = function() {
+  var lines = this.screen().split('\n').filter(function(l) { return l.trim(); });
+  if (!JJPtt.PROMPT.test(lines[lines.length - 1] || '')) return Promise.resolve();
+  var before = this.screen();
+  this.send(new Array(81).join('\b') + '\r');
+  return this.settle(before, 1500);
+};
+
 // Into a board's article list.
 JJPtt.prototype.toBoard = function(board) {
   var self = this;
   if (!/^[A-Za-z0-9_\-]{1,20}$/.test(board || '')) return Promise.reject(new Error('看板名稱不對'));
   // out of an article, then "s" (select board) -- which only works in a
   // list, not in the main menu: from there, 我的最愛 first
-  if (/瀏覽 第|\(y\)回應/.test(this.screen())) this.send('q');
-  return JJPtt.sleep(200).then(function() {
+  return this.clearPrompt().then(function() {
+    // an article (a board list's footer says (y)回應 too: stay there)
+    var now = self.screen();
+    if (/瀏覽 第/.test(now) || (/\(y\)回應/.test(now) && !/文章選讀/.test(now))) self.send('q');
+    return JJPtt.sleep(200);
+  }).then(function() {
     if (/【\s*主功能表\s*】|主功能表/.test(self.screen())) return self.enterFavorites();
   }).then(function() {
     // only PTT's own prompt, newly on the screen: a board list's header
@@ -425,7 +443,7 @@ JJPtt.prototype.toBoard = function(board) {
     // opens is thrown away (pushes failed with 「進 Gossiping 板」)
     var before = self.screen();
     self.send('s');
-    return self.wait({ ask: /請輸入看板名稱/ }, 8000, before, '按 s 選看板');
+    return self.wait({ ask: /請輸入看板名稱/ }, 8000, before, '開啟看板選單');
   }).then(function() {
     self.type(board + '\r');
     var name = board.replace(/[^\w-]/g, '');
@@ -533,28 +551,41 @@ JJPtt.prototype.push = function(url, kind, text) {
     return self.ensureIn().then(function() {
       return self.toArticle(url);
     }).then(function() {
+      // only what PTT newly shows counts: an old push line or the list's
+      // header (看板《…》) is not its answer
+      var before = self.screen();
       self.send('X');
       return self.wait({
         choose: /值得推薦|給它噓聲|只加.*註解|1\.\s*值得/,
         input: /(推|噓|→)\s*\w+\s*[:：]/,
         no: /禁止推薦|不能推薦|無法推文|禁止推文|您不能|已被鎖定|權限不足/,
         wait: /推文間隔|請稍候|太快/
-      }, 8000, undefined, '按 X 推文');
+      }, 8000, before, '按 X 推文');
     }).then(function(k) {
       if (k === 'no') throw new Error('這個板或這篇文章不能推文');
       if (k === 'wait') throw new Error('推文太快了，等一下再試');
       if (k === 'choose') {
+        var before = self.screen();
         self.send(kind === '2' ? '2' : kind === '3' ? '3' : '1');
-        return self.wait({ input: /(推|噓|→)\s*\w+\s*[:：]/, no: /禁止|不能|無法/ }, 6000, undefined, '選推噓後等輸入框');
+        return self.wait({ input: /(推|噓|→)\s*\w+\s*[:：]/, no: /禁止|不能|無法/ }, 6000, before, '選推噓後等輸入框');
       }
       return k;
     }).then(function(k) {
       if (k === 'no') throw new Error('這篇文章不能用這種方式推文');
+      var before = self.screen();
       self.type(text + '\r');
-      return self.wait({ confirm: /確定\s*\[y\/N\]|確定要/i, done: /文章選讀|看板《/ }, 8000, undefined, '送出推文');
+      // the list header says 看板《…》 all along: only its footer coming
+      // back (文章選讀) or the 確定 question is PTT's answer
+      return self.wait({ confirm: /確定.*\[y\/n\]|確定要/i, done: /文章選讀/ }, 8000, before, '送出推文');
     }).then(function(k) {
-      if (k === 'confirm') self.send('y\r');
-      return JJPtt.sleep(600);
+      if (k !== 'confirm') return;
+      var before = self.screen();
+      self.send('y\r');
+      return self.wait({ done: /文章選讀|看板《/ }, 8000, before).catch(function() {
+        throw new Error('不確定有沒有推出去，請重新整理看看');
+      });
+    }).then(function() {
+      return JJPtt.sleep(300);
     });
   });
 };
