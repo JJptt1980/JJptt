@@ -140,6 +140,51 @@ test('assignBlocks numbers the blocks between other lines', function() {
   assert.deepStrictEqual(ps.map(function(p) { return p.block; }), [1, 1, 2]);
 });
 
+// ---- 連推 runs as one line -------------------------------------------------
+console.log('連推 collapsed into one line');
+function runLines(ps) {
+  var lines = ps.map(function(p, i) { var l = []; l.push_index = i; return l; });
+  PttReader.groupRuns(lines, ps);
+  return lines;
+}
+function said(id, minute, words) { var p = push(id, minute); p.content = words; return p; }
+test('a run of 5 (cut in once) becomes one line; 4 does not', function() {
+  var ps = many('a', 3, 1).concat([push('x', 1)]).concat(many('a', 2, 2)).concat(many('b', 4, 3));
+  var runs = PttReader.collapsedRuns(runLines(ps), ps, DEFAULT_PREFS, 'op');
+  assert.strictEqual(runs.length, 1);
+  assert.deepStrictEqual(runs[0].idx, [0, 1, 2, 4, 5]);
+});
+test('the run length can be changed; the setting off collapses nothing', function() {
+  var ps = many('b', 4, 3);
+  assert.strictEqual(PttReader.collapsedRuns(runLines(ps), ps, Object.assign({}, DEFAULT_PREFS, { readerCollapseRunMin: 4 }), 'op').length, 1);
+  assert.strictEqual(PttReader.collapsedRuns(runLines(many('a', 8, 1)), many('a', 8, 1), Object.assign({}, DEFAULT_PREFS, { readerCollapseRuns: false }), 'op').length, 0);
+});
+test('the author\'s own replies: left alone by default, collapsed (not 連推) when turned on', function() {
+  var ps = many('op', 6, 1);
+  assert.strictEqual(DEFAULT_PREFS.readerCollapseAuthorRuns, false);
+  assert.strictEqual(PttReader.collapsedRuns(runLines(ps), ps, DEFAULT_PREFS, 'op').length, 0);
+  var runs = PttReader.collapsedRuns(runLines(ps), ps, Object.assign({}, DEFAULT_PREFS, { readerCollapseAuthorRuns: true }), 'OP');
+  assert.strictEqual(runs.length, 1);
+  assert.strictEqual(runs[0].author, true);
+});
+test('summary: floors, times and the text joined (Chinese without spaces)', function() {
+  var ps = [push('z', 0), said('a', 1, '我覺得這件事'), said('a', 1, '其實沒有那麼簡單'), said('a', 2, '大家想想'), said('a', 2, 'ok then'), said('a', 3, 'bye')];
+  var s = PttReader.runSummary(ps, [1, 2, 3, 4, 5]);
+  assert.strictEqual(s.n, 5);
+  assert.strictEqual(s.floors, '#2–#6');
+  assert.strictEqual(s.time, '10:01–10:03');
+  assert.strictEqual(s.text, '我覺得這件事其實沒有那麼簡單大家想想ok then bye');
+});
+test('summary: the same sentence repeated is 「同一句 ×N」', function() {
+  var ps = [1, 2, 3, 4, 5].map(function(m) { return said('a', m, '支持 '); });
+  assert.strictEqual(PttReader.runSummary(ps, [0, 1, 2, 3, 4]).text, '同一句 ×5：支持');
+});
+test('both the extension\'s reading mode and the app draw runs as one line', function() {
+  assert.ok(/collapsedRuns\(/.test(PttReader.prototype.render.toString()), 'reader.render');
+  assert.ok(/collapsedRuns\(/.test(JJMobile.prototype.fillArticle.toString()), 'app');
+  assert.ok(typeof JJMobile.prototype.runRow === 'function');
+});
+
 // ---- 連推 rule --------------------------------------------------------------
 
 console.log('連推 (factFloodRun)');

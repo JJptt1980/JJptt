@@ -1070,6 +1070,14 @@ input.jj-color { width: 80px !important; height: 34px; padding: 2px; }
 .jjt-root .jjt-push-left { flex: 1; min-width: 0; }
 .jjt-root .jjt-push-right { flex: none; white-space: pre; }
 .jjt-root .jjt-faded { opacity: 0.2; }
+.jjt-root .jjt-run-head { cursor: pointer; }
+.jjt-root .jjt-run-badge { color: #ff8a65; font-weight: bold; }
+.jjt-root .jjt-run-toggle { color: #888; }
+.jjt-root .jjt-run-text { padding-left: 2ch; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+.jjt-root .jjt-run-floors { display: none; }
+.jjt-root .jjt-run-open .jjt-run-floors { display: block; }
+.jjt-root .jjt-run-open .jjt-run-text { display: none; }
+.jjt-root .jjt-run.jjt-faded .jjt-faded { opacity: 1; }
 .jjt-root .jjt-line[data-jj-floor]::before {
   content: attr(data-jj-floor);
   position: absolute; top: 0; right: 100%;
@@ -1889,3 +1897,13 @@ body.jj-mobile #jjToast {
 }
 .jjm-selbar .jjm-btn { pointer-events: auto; box-shadow: 0 6px 20px rgba(0,0,0,.5); min-height: 48px; padding: 0 20px;
   border-radius: var(--r-pill); font-size: var(--f-md); }
+
+/* 連推 as one row (JJMobile.runRow): two lines of the joined text, tap for the floors */
+.jjm-run-row { cursor: pointer; }
+.jjm-run-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.jjm-run-toggle { margin: 4px 0 0 30px; font-size: var(--f-xs); color: var(--muted); }
+.jjm-run-floors { display: none; }
+.jjm-run-open .jjm-run-floors { display: block; }
+.jjm-run-open .jjm-run-text { display: none; }
+.jjm-run .jjm-run-floors .jjm-push { padding-left: 30px; }
+.jjm-run.jjm-faded .jjm-faded { opacity: 1; }

@@ -136,6 +136,9 @@ JJMobile.prototype.renderSettings = function(screen) {
   rd.appendChild(this.toggleRow('readerLowResImages', '用低解析度圖片', '載入快、省流量；點圖片看原圖'));
   rd.appendChild(this.toggleRow('hidePinned', '隱藏置底公告', '看板文章列表不顯示板規、公告那些置底文章'));
   rd.appendChild(this.toggleRow('readerGroupRuns', '同一個人的連續推文排在一起', '被別人插話打斷的也排回一起，樓層照舊'));
+  rd.appendChild(this.toggleRow('readerCollapseRuns', '連續推文濃縮成一行', '同一個人連推很多則時，只顯示一行：連推幾則、樓層、時間和接起來的內容；點一下看原本每一樓'));
+  rd.appendChild(this.numberRow('readerCollapseRunMin', '連續幾則以上才濃縮', '預設 5', 2, 50));
+  rd.appendChild(this.toggleRow('readerCollapseAuthorRuns', '作者的連續回覆也濃縮', '作者在自己文章裡連續回覆時也濃縮成一行（不標連推）'));
   this.layoutPane(panes.layout, screen);
 
   // search

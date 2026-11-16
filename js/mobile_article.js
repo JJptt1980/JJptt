@@ -51,6 +51,9 @@ JJMobile.prototype.fillArticle = function(screen, article) {
   var lines = PttReader.toLines(article.body);
   var pv = this.app.pref && this.app.pref.values;
   if (!(pv && pv.readerGroupRuns === false)) PttReader.groupRuns(lines, article.pushes);
+  var runAt = {};
+  PttReader.collapsedRuns(lines, article.pushes, pv, String(meta['作者'] || '').split(' ')[0])
+    .forEach(function(r) { runAt[r.start] = r; });
   var pushList = null;
   for (var i = 0; i < lines.length; ++i) {
     var line = lines[i];
@@ -73,6 +76,14 @@ JJMobile.prototype.fillArticle = function(screen, article) {
         v.appendChild(title);
         pushList = el('div', 'jjm-pushes');
         v.appendChild(pushList);
+      }
+      var run = runAt[i];
+      if (run) {  // 連推 as one line (hidden blacklisted pushes stay hidden)
+        var rows = [];
+        for (var ri = run.start; ri < run.end; ++ri) if (pushes[lines[ri].push_index]) rows.push(pushes[lines[ri].push_index]);
+        if (rows.length) pushList.appendChild(this.runRow(article, run, rows));
+        i = run.end - 1;
+        continue;
       }
       var node = pushes[line.push_index];
       if (node) pushList.appendChild(node);
@@ -655,6 +666,37 @@ JJMobile.prototype.pushInfo = function(article, fact) {
     out[i] = row;
   });
   return out;
+};
+
+// A 連推 run as one row: account, 連推N, floors, times, the text joined;
+// tap to open the original floors (PttReader.runSummary, as the extension).
+JJMobile.prototype.runRow = function(article, run, rows) {
+  var el = JJMobile.el;
+  var sum = PttReader.runSummary(article.pushes, run.idx);
+  var faded = rows.every(function(r) { return r.classList.contains('jjm-faded'); });
+  var box = el('div', 'jjm-run' + (faded ? ' jjm-faded' : ''));
+  var row = el('div', 'jjm-push jjm-run-row');
+  var head = el('div', 'jjm-push-head');
+  var tagCls = sum.tag === '推' ? 'up' : sum.tag === '噓' ? 'down' : 'arrow';
+  head.appendChild(el('span', 'jjm-push-tag jjm-push-' + tagCls, sum.tag));
+  head.appendChild(this.userChip(sum.id, null, true));
+  head.appendChild(el('span', 'jjm-pchip jjm-pchip-' + (run.author ? 'grey' : 'warn'), (run.author ? '連續回覆' : '連推') + sum.n));
+  head.appendChild(el('span', 'jjm-push-time', sum.time));
+  head.appendChild(el('span', 'jjm-push-floor', sum.floors.replace(/#/g, '') + '樓'));
+  row.appendChild(head);
+  row.appendChild(el('div', 'jjm-push-text jjm-run-text', sum.text));
+  var toggle = el('div', 'jjm-run-toggle', '▸ 展開 ' + sum.n + ' 則原文');
+  row.appendChild(toggle);
+  box.appendChild(row);
+  var floors = el('div', 'jjm-run-floors');
+  rows.forEach(function(r) { floors.appendChild(r); });
+  box.appendChild(floors);
+  row.addEventListener('click', function(e) {
+    if (e.target.closest && e.target.closest('button')) return;  // the account's own menu
+    var open = box.classList.toggle('jjm-run-open');
+    toggle.textContent = open ? '▾ 收起' : '▸ 展開 ' + sum.n + ' 則原文';
+  });
+  return box;
 };
 
 // ---- people: tap an ID for lists / search -------------------------------------------

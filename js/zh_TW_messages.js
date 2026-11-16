@@ -798,6 +798,15 @@ locale.zh_TW = {
   "flood_autoBlacklisted": {
     "message": "已自動把 %s 加入黑名單 24 小時（連推 %n 則）"
   },
+  "options_readerCollapseRuns": {
+    "message": "閱讀模式：同一個人連續推很多則時，濃縮成一行（帳號、連推幾則、樓層、時間，加上把這幾則接起來的內容）；點一下展開原本的每一樓"
+  },
+  "options_readerCollapseRunMin": {
+    "message": "連續幾則以上才濃縮成一行"
+  },
+  "options_readerCollapseAuthorRuns": {
+    "message": "作者在自己文章裡的連續回覆也濃縮（不標連推）"
+  },
   "options_readerGroupRuns": {
     "message": "閱讀模式：同一個人被別人插話打斷的連續推文自動排在一起（3 樓內、2 分鐘內接著推的；樓層號碼保留原本的）"
   },

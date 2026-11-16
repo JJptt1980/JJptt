@@ -1244,6 +1244,9 @@ PttReader.prototype.render = function(article, h) {
   var pushNodes = this.renderPushes(article);
   var pv = this.app.pref && this.app.pref.values;
   if (!(pv && pv.readerGroupRuns === false)) PttReader.groupRuns(lines, article.pushes);
+  var runAt = {};
+  PttReader.collapsedRuns(lines, article.pushes, pv, String(article.meta['作者'] || '').split(' ')[0])
+    .forEach(function(r) { runAt[r.start] = r; });
   var reportShown = false;
   for (var i = 0; i < lines.length; ++i) {
     if (lines[i].push_index !== undefined) {
@@ -1251,6 +1254,24 @@ PttReader.prototype.render = function(article, h) {
         reportShown = true;
         var rep = this.factReportNode(article);
         if (rep) page.appendChild(rep);
+      }
+      var run = runAt[i];
+      if (run) {  // 連推 as one line (hidden blacklisted pushes stay hidden)
+        var frags = [], faded = true;
+        for (var ri = run.start; ri < run.end; ++ri) {
+          var rn = pushNodes[lines[ri].push_index];
+          if (!rn) continue;
+          rn.line.setAttribute('data-line', 5 + ri);
+          if (!rn.line.classList.contains('jjt-faded')) faded = false;
+          frags.push(rn.frag);
+        }
+        if (frags.length) {
+          var rnode = this.runNode(article, run, frags, faded);
+          rnode.firstChild.setAttribute('data-line', 5 + i);
+          page.appendChild(rnode);
+        }
+        i = run.end - 1;
+        continue;
       }
       var pn = pushNodes[lines[i].push_index];
       if (pn) {
@@ -1366,6 +1387,95 @@ PttReader.groupRuns = function(lines, pushes) {
     var order = reorder(block);
     for (var n = 0; n < order.length; ++n) lines[start + n].push_index = order[n];
   }
+};
+
+// 連推 runs as one line: after groupRuns a person's run sits on adjacent
+// lines; a run of `readerCollapseRunMin` (5) or more pushes is drawn as one
+// summary line with the run's text joined, ▸ opens the original floors.
+// The author's own runs only with readerCollapseAuthorRuns (off by default).
+// Returns [{start, end (line indices, end exclusive), idx: [push indices], author}].
+PttReader.collapsedRuns = function(lines, pushes, values, authorId) {
+  var v = values || {};
+  if (v.readerCollapseRuns === false) return [];
+  var min = parseInt(v.readerCollapseRunMin, 10);
+  if (isNaN(min)) min = 5;
+  min = Math.max(2, min);
+  var withAuthor = v.readerCollapseAuthorRuns === true;
+  var author = String(authorId || '').toLowerCase();
+  var out = [];
+  var i = 0;
+  var idOf = function(k) { return lines[k] && lines[k].push_index !== undefined && pushes[lines[k].push_index] ?
+                                  String(pushes[lines[k].push_index].id).toLowerCase() : null; };
+  while (i < lines.length) {
+    var id = idOf(i);
+    if (id === null) { i++; continue; }
+    var j = i + 1;
+    while (j < lines.length && idOf(j) === id) j++;
+    var isAuthor = !!author && id === author;
+    if (j - i >= min && (!isAuthor || withAuthor)) {
+      var idx = [];
+      for (var k = i; k < j; ++k) idx.push(lines[k].push_index);
+      out.push({ start: i, end: j, idx: idx, author: isAuthor });
+    }
+    i = j;
+  }
+  return out;
+};
+
+// What the summary line says: floors, times, and the pushes' text joined
+// (PTT cuts long comments into pushes). The same sentence over and over is
+// 「同一句 ×N：…」.
+PttReader.runSummary = function(pushes, idx) {
+  var ps = idx.map(function(k) { return pushes[k]; });
+  var floors = idx.map(function(k) { return k + 1; });
+  var texts = ps.map(function(p) { return String(p.content || '').trim(); });
+  var times = ps.map(function(p) { var m = /(\d{1,2}:\d{2})/.exec(p.time || ''); return m ? m[1] : ''; }).filter(Boolean);
+  var norm = texts.map(function(t) { return t.replace(/\s+/g, ''); });
+  var same = norm.every(function(t) { return t === norm[0]; }) && !!norm[0];
+  var joined = '';
+  texts.forEach(function(t) {
+    if (!t) return;
+    // no space between Chinese; a space between words in other scripts
+    var gap = joined && !/[⺀-鿿＀-￯]$/.test(joined) && !/^[⺀-鿿＀-￯]/.test(t) ? ' ' : '';
+    joined += gap + t;
+  });
+  var lo = Math.min.apply(null, floors), hi = Math.max.apply(null, floors);
+  return {
+    id: ps[0].id, tag: ps[0].tag, n: ps.length,
+    floors: '#' + lo + (hi > lo ? '–#' + hi : ''),
+    time: times.length ? times[0] + (times[times.length - 1] !== times[0] ? '–' + times[times.length - 1] : '') : '',
+    same: same,
+    text: same ? '同一句 ×' + ps.length + '：' + texts[0] : joined
+  };
+};
+
+// The desktop summary line; `frags` are the run's own push nodes.
+PttReader.prototype.runNode = function(article, run, frags, faded) {
+  var el = PttReader.el;
+  var sum = PttReader.runSummary(article.pushes, run.idx);
+  var box = el('div', 'jjt-run' + (faded ? ' jjt-faded' : ''));
+  var head = el('div', 'jjt-line jjt-push jjt-run-head');
+  var left = el('span', 'jjt-push-left');
+  left.appendChild(el('span', sum.tag === '推' ? 'q15 b0' : 'q9 b0', sum.tag + ' '));
+  left.appendChild(el('span', 'q11 b0', sum.id));
+  left.appendChild(el('span', 'q3 b0', ': '));
+  left.appendChild(el('span', 'jjt-run-badge', (run.author ? '連續回覆' : '連推') + sum.n));
+  left.appendChild(el('span', 'q7 b0', ' ' + sum.floors + (sum.time ? ' ' + sum.time : '') + ' '));
+  var toggle = el('span', 'jjt-run-toggle', '▸ 展開');
+  left.appendChild(toggle);
+  head.appendChild(left);
+  box.appendChild(head);
+  box.appendChild(el('div', 'jjt-line jjt-run-text q3 b0', sum.text));
+  var floors = el('div', 'jjt-run-floors');
+  frags.forEach(function(f) { floors.appendChild(f); });
+  box.appendChild(floors);
+  head.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var open = box.classList.toggle('jjt-run-open');
+    toggle.textContent = open ? '▾ 收起' : '▸ 展開';
+  });
+  return box;
 };
 
 // "罐頭A：…", "罐頭B：…" -> "罐頭（2 組）：…；…"; "脈衝 1：…", "脈衝 2：…" likewise.

@@ -801,6 +801,15 @@ locale.en_US = {
   "flood_autoBlacklisted": {
     "message": "%s is on the blacklist for 24 hours (%n pushes in a row)"
   },
+  "options_readerCollapseRuns": {
+    "message": "Reading mode: when one person pushes many times in a row, show the run as one line (account, how many, floors, times and the pushes' text joined); click to open the original floors"
+  },
+  "options_readerCollapseRunMin": {
+    "message": "Pushes in a row before they become one line"
+  },
+  "options_readerCollapseAuthorRuns": {
+    "message": "Also collapse the author's own replies in a row (not labelled 連推)"
+  },
   "options_readerGroupRuns": {
     "message": "Article view: keep one person's run of pushes together when others cut in (within 3 floors and 2 minutes; floor numbers stay)"
   },
