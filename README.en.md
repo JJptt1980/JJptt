@@ -67,6 +67,7 @@ These are hard to spot by eye. JJptt marks them right next to the pushes.
 | 👍 **One-handed reading** | In the Android app, previous / next can be small buttons floating on the left or right edge of the screen, right under your thumb, so you can keep reading with one hand (Settings → 版面 (layout) → 內文 (text) → 「上一篇／回列表／下一篇 放在哪」; both sides can be on) |
 | 📖 **Easy to read** | Images, videos and news show right inside the article. The next article is loaded ahead, so it opens at once |
 | 🎨 **Pushes at a glance** | Floors, flags, and how many times one person pushed are all colour-coded. People you'd rather not read can go on a blacklist, faded or hidden |
+| 🕹️ **Pure nostalgia** | The Chrome extension can wear a NetTerm-like or Kokoren-like (KKMan) window, with a 256-colour globe or a 花魁異色館 pixel-letter entry screen while connecting: dial-up BBS days, back in one click ([see it](#retro)) |
 | 🔄 **Settings travel with you** | Settings on your computer can move to your phone. A layout you like on the phone becomes a short code you can share with friends |
 
 ## 📱 Android app
@@ -86,6 +87,30 @@ An "extension" is a small tool you add to your browser. JJptt keeps PTT's origin
 - **Reading mode**: images, videos and news inside the article; the next article loaded ahead.
 - **Gets handier as you go**: newest articles on top; select a passage to ask AI.
 - **Settings travel with you**: sync through your Google account or save them to a file; when there's a new version, one click updates it.
+
+<a name="retro"></a>
+
+### 🕹️ Retro window styles: back to the dial-up days
+
+Remember the modem's screech, sneaking onto a BBS late at night, waiting minutes for one picture to load? The JJptt Chrome extension can dress the screen up the way it looked back then:
+
+- **NetTerm-like**: a grey Windows 3.1 window, a teal title bar, a row of chunky 3D buttons, and a grainy 256-colour globe while connecting.
+- **Kokoren-like** (柯柯人): a Windows 7 glass window, round glossy buttons, an address bar reading `telnet://ptt.cc`, site tabs at the bottom and a status bar counting your connection time. While connecting you get a BBS-style entry screen: 花魁異色館 in big yellow pixel letters.
+
+Old look, new tricks: reading mode and the fact check work just the same.
+
+**To turn it on:** Settings → 版面 (Layout) → 介面 → 視窗風格 (window style), then pick NetTerm-like or Kokoren-like. Pick the plain (all black) one to go back.
+
+| NetTerm-like | Kokoren-like |
+|---|---|
+| ![NetTerm-like: grey window and the 256-colour globe](docs/images/frame-netterm.png) | ![Kokoren-like: glass window and the 花魁異色館 entry screen](docs/images/frame-kokoren.png) |
+
+<sub>※ Looks only: the buttons and menus on the frame just say 「施工中」 (under construction) for now; use the keyboard as usual. Not in the Android app.</sub>
+
+<sub>※ **NetTerm**: a 1990s Windows terminal program; for many people in Taiwan it was how they first got onto a BBS.</sub><br>
+<sub>※ **KKMan** (called 柯柯人 here): a browser that was hugely popular in Taiwan around 2000, built on Internet Explorer, with BBS connections and tabs built in, so you could browse the web and stay on a BBS at the same time.</sub><br>
+<sub>※ **花魁異色館**: an old BBS station from the KKCITY days; its full-screen yellow pixel-letter welcome screen is a shared memory for many.</sub><br>
+<sub>※ These names only describe what the styles look like; JJptt has nothing to do with the original programs or station, and every icon and picture here was drawn for JJptt.</sub>
 
 **[Chrome extension: install and use](docs/desktop.en.md)**
 
