@@ -1351,6 +1351,36 @@ test('custom-list (網軍) pushers get no image thumbnails, like the blacklist (
   assert.ok(/if \(!black && !\(id in notes\)\)/.test(app), 'app shows thumbnails for custom-list users');
 });
 
+test('custom list: the label uses the user\'s own list name; fading is a setting, off by default', function() {
+  assert.strictEqual(DEFAULT_PREFS.customListFade, false, 'fading the custom list is opt-in');
+  var pref = makePref({ customListName: '幹他媽網軍' });
+  pref.notedUserIds = { z2wen: '', abc: '帶風向' };
+  assert.strictEqual(pref.customListLabel('Z2wen'), '幹他媽網軍');
+  assert.strictEqual(pref.customListLabel('abc', '：'), '幹他媽網軍：帶風向');
+  assert.strictEqual(pref.customListLabel('nobody'), '');
+  assert.strictEqual(pref.fadesNoted('z2wen'), false);
+  pref.values.customListFade = true;
+  assert.strictEqual(pref.fadesNoted('z2wen'), true);
+  assert.strictEqual(pref.fadesNoted('nobody'), false);
+  pref.values.customListEnabled = false;
+  assert.strictEqual(pref.customListLabel('z2wen'), '', 'list off: no label');
+  assert.strictEqual(pref.fadesNoted('z2wen'), false, 'list off: not faded');
+  ['index.html', 'extension/app.html'].forEach(function(f) {
+    assert.ok(fs.readFileSync(path.join(root, f), 'utf8').indexOf('id="opt_customListFade"') >= 0, f + ' has no field');
+  });
+  var zh = fs.readFileSync(path.join(root, 'js/zh_TW_messages.js'), 'utf8');
+  var en = fs.readFileSync(path.join(root, 'js/en_US_messages.js'), 'utf8');
+  assert.ok(zh.indexOf('"options_customListFade"') >= 0 && en.indexOf('"options_customListFade"') >= 0);
+});
+test('custom list: the 連推 line shows the list name on the right, like a single push (and in the app)', function() {
+  var desk = PttReader.prototype.runNode.toString();
+  assert.ok(/customListLabel\(sum\.id\)/.test(desk) && /jjt-itag-note/.test(desk), 'reader 連推 line has no list name');
+  var app = JJMobile.prototype.runRow.toString();
+  assert.ok(/customListLabel\(sum\.id/.test(app) && /jjm-pchip-note/.test(app), 'app 連推 row has no list name');
+  assert.ok(/fadesNoted\(id\)/.test(PttReader.prototype.renderPushes.toString()), 'reader does not fade the custom list');
+  assert.ok(/fadesNoted\(id\)/.test(JJMobile.prototype.pushInfo.toString()), 'app does not fade the custom list');
+});
+
 // ---- classic window frames (js/frame_style.js) ----------------------------
 vm.runInThisContext(fs.readFileSync(path.join(root, 'js/frame_style.js'), 'utf8'), { filename: 'js/frame_style.js' });
 test('視窗風格: setting, choices, page fields and text in both languages', function() {

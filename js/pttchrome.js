@@ -1381,6 +1381,10 @@ pttchrome.App.prototype.onPrefChange = function(pref, name) {
       this.view.redraw(true);
       if (this.reader && this.reader.isOpen && this.reader.isOpen()) this.reader.rerender();
       break;
+    case 'customListFade':
+      this.view.redraw(true);
+      if (this.reader && this.reader.isOpen && this.reader.isOpen()) this.reader.rerender();
+      break;
     case 'watchlistEnabled':
     case 'customListEnabled':
       this.pushInsights.annotate();

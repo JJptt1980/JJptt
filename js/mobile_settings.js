@@ -204,6 +204,7 @@ JJMobile.prototype.renderSettings = function(screen) {
     function(id) { self.app.doAddWatchUserId(id); }, function(id) { self.app.doRemoveWatchUserId(id); }, screen));
   ls.appendChild(this.toggleRow('customListEnabled', '自訂名單', '推文旁標名單名稱，列表上作者變青色'));
   ls.appendChild(this.textRow('customListName', '自訂名單的名稱', '預設「網軍」'));
+  ls.appendChild(this.toggleRow('customListFade', '自訂名單也變暗', '名單上的人推文比照黑名單變暗'));
   ls.appendChild(this.listRow(pref.customListName(), Object.keys(pref.notedUserIds || {}), pref.notedUserIds || {},
     function(id) { self.app.doSetUserNote(id); }, function(id) { self.app.doRemoveUserNote(id); }, screen));
 

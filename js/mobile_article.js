@@ -638,7 +638,8 @@ JJMobile.prototype.pushInfo = function(article, fact) {
       if (t.lvl === 'warn') level = 'warn';
     });
 
-    var row = el('div', 'jjm-push' + (black ? ' jjm-faded' : ''));
+    var faded = black || !!(pref && pref.fadesNoted && pref.fadesNoted(id));
+    var row = el('div', 'jjm-push' + (faded ? ' jjm-faded' : ''));
     if (level) row.setAttribute('data-level', level);
     var head = el('div', 'jjm-push-head');
     var tagCls = p.tag === '推' ? 'up' : p.tag === '噓' ? 'down' : 'arrow';
@@ -681,6 +682,9 @@ JJMobile.prototype.runRow = function(article, run, rows) {
   head.appendChild(el('span', 'jjm-push-tag jjm-push-' + tagCls, sum.tag));
   head.appendChild(this.userChip(sum.id, null, true));
   head.appendChild(el('span', 'jjm-pchip jjm-pchip-' + (run.author ? 'grey' : 'warn'), (run.author ? '連續回覆' : '連推') + sum.n));
+  var pref = this.app && this.app.pref;
+  var listLabel = pref && pref.customListLabel ? pref.customListLabel(sum.id, '：') : '';
+  if (listLabel) head.appendChild(el('span', 'jjm-pchip jjm-pchip-note', listLabel));  // the custom list, as on a single push
   head.appendChild(el('span', 'jjm-push-time', sum.time));
   head.appendChild(el('span', 'jjm-push-floor', sum.floors.replace(/#/g, '') + '樓'));
   row.appendChild(head);

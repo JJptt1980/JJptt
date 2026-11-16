@@ -537,7 +537,9 @@ TermView.prototype = {
           }
         }
         var blacklistStyle = '';
-        if (shouldFade) {
+        if (!shouldFade && userid && this.buf.pageState == 3 && pref.fadesNoted && pref.fadesNoted(userid)) {
+          blacklistStyle = ' style="opacity:0.2"';  // custom list: faded, never hidden
+        } else if (shouldFade) {
           // the automatic blacklist alone: faded even when 不顯示 is on
           var autoOnly = !kwFade && userid && !pref.hidesBlacklisted(userid);
           blacklistStyle = ' style="' + (autoOnly ? 'opacity:0.2' : this.blacklistedRowStyle()) + '"';

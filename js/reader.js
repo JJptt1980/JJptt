@@ -1467,6 +1467,14 @@ PttReader.prototype.runNode = function(article, run, frags, faded) {
   var toggle = el('span', 'jjt-run-toggle', '▸ 展開');
   left.appendChild(toggle);
   head.appendChild(left);
+  // the custom list's name on the right, like a single push
+  var pref = this.app && this.app.pref;
+  var listLabel = pref && pref.customListLabel ? pref.customListLabel(sum.id) : '';
+  if (listLabel) {
+    var right = el('span', 'q7 b0 jjt-push-right', ' ');
+    right.appendChild(el('span', 'jjt-itag jjt-itag-note', listLabel));
+    head.appendChild(right);
+  }
   box.appendChild(head);
   box.appendChild(el('div', 'jjt-line jjt-run-text q3 b0', sum.text));
   var floors = el('div', 'jjt-run-floors');
@@ -1711,7 +1719,8 @@ PttReader.prototype.renderPushes = function(article) {
     var label = insights.fitLabel(full, parts, hints, T, self.rightSpaceCols);
 
     // "推 userid: content          ip mm/dd hh:mm" in PTT colours
-    var line = el('div', 'jjt-line jjt-push' + (blackListed ? ' jjt-faded' : ''));
+    var faded = blackListed || !!(pref && pref.fadesNoted && pref.fadesNoted(id));
+    var line = el('div', 'jjt-line jjt-push' + (faded ? ' jjt-faded' : ''));
     line.setAttribute('data-user', id);
     PushInsights.setRepeatColor(line, insights.repeatColor(repeatColors, id, countById[id]));
     var left = el('span', 'jjt-push-left');

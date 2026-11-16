@@ -807,6 +807,20 @@ PttChromePref.prototype = {
     return String((this.values && this.values.customListName) || '').trim() || '網軍';
   },
 
+  // 'name' or 'name:note' when the user is on the custom list (and it is on), else ''.
+  customListLabel: function(id, sep) {
+    if (!this.values || this.values.customListEnabled === false) return '';
+    var notes = this.notedUserIds || {};
+    id = String(id || '').toLowerCase();
+    if (!(id in notes)) return '';
+    return this.customListName() + (notes[id] ? (sep || ':') + notes[id] : '');
+  },
+
+  // Faded like the blacklist (設定: 自訂名單的人推文也比照黑名單變暗).
+  fadesNoted: function(id) {
+    return !!(this.values && this.values.customListFade && this.customListLabel(id));
+  },
+
   setNotesValue: function() {
     this.values.notedUserIds = JSON.stringify(this.notedUserIds);
   },

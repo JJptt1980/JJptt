@@ -888,6 +888,9 @@ locale.zh_TW = {
   "options_watchlistEnabled": {
     "message": "啟用觀察名單（推文旁標示；關掉時名單保留）"
   },
+  "options_customListFade": {
+    "message": "自訂名單的人推文也比照黑名單變暗"
+  },
   "options_customListEnabled": {
     "message": "啟用自訂名單（推文旁標示名單名稱；關掉時名單保留）"
   },

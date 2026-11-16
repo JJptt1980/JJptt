@@ -39,6 +39,7 @@ var DEFAULT_PREFS = {
   blacklistMode : 0,
   watchlistEnabled : true,
   customListEnabled : true,
+  customListFade : false,   // custom-list pushers faded like the blacklist
   blacklistedUserIds  : '{}',
   hideBlacklisted : false,
   pushFilterDefault : 10,
