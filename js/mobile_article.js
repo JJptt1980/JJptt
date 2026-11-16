@@ -658,7 +658,7 @@ JJMobile.prototype.pushInfo = function(article, fact) {
     var content = reader.lineNode([{ text: p.content, st: { fg: 7, bg: 0, hl: false, href: '' } }]);
     content.node.className = 'jjm-push-text';
     row.appendChild(content.node);
-    if (!black) {
+    if (!black && !(id in notes)) {  // no thumbnails for blacklisted or custom-list users
       content.urls.forEach(function(u) {
         if (PttReader.imageSrc(u)) row.appendChild(reader.linkBlock(u, true));
       });

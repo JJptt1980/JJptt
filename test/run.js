@@ -1342,6 +1342,15 @@ test('every fact-check rule has Chinese and English text', function() {
   });
 });
 
+test('custom-list (網軍) pushers get no image thumbnails, like the blacklist (also inside 連推 runs)', function() {
+  // runs reuse these push nodes, so the rule covers their floors too
+  var desk = PttReader.prototype.renderPushes.toString();
+  assert.ok(/if \(blackListed \|\| id in notes\) return;/.test(desk), 'reader shows thumbnails for custom-list users');
+  assert.ok(desk.indexOf('var notes =') < desk.indexOf('id in notes) return'), 'notes read before the thumbnails');
+  var app = JJMobile.prototype.pushInfo.toString();
+  assert.ok(/if \(!black && !\(id in notes\)\)/.test(app), 'app shows thumbnails for custom-list users');
+});
+
 // ---- classic window frames (js/frame_style.js) ----------------------------
 vm.runInThisContext(fs.readFileSync(path.join(root, 'js/frame_style.js'), 'utf8'), { filename: 'js/frame_style.js' });
 test('視窗風格: setting, choices, page fields and text in both languages', function() {

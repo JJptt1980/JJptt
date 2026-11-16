@@ -1742,7 +1742,7 @@ PttReader.prototype.renderPushes = function(article) {
     result[i] = { line: line, frag: wrap };
     // images posted in pushes
     content.urls.forEach(function(u) {
-      if (blackListed) return;  // no thumbnails for blacklisted users
+      if (blackListed || id in notes) return;  // no thumbnails for blacklisted or custom-list users
       if (!PttReader.imageSrc(u)) return;
       var media = self.linkBlock(u, true);
       media.className += ' jjt-push-media';
