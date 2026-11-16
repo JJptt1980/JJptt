@@ -3,6 +3,13 @@
 // extension/manifest.json and CHANGELOG.md.
 var JJPTT_CHANGELOG = [
   {
+    version: '1.35.2',
+    date: '2026-11-16',
+    changes: [
+      '修正：在閱讀模式按 X 推文後，剛推的那則不會再閃一下就被舊的網頁版蓋掉。推完會先停在終端機畫面（看得到剛推的），等 www.ptt.cc 也更新出這則推文後再自動回到閱讀模式（最多等 30 秒）'
+    ]
+  },
+  {
     version: '1.35.1',
     date: '2026-11-16',
     changes: [
