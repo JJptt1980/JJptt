@@ -1235,6 +1235,37 @@ testAsync('push: the list header 看板《…》 is not the answer to the text -
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '3', '滾蛋');
   assert.strictEqual(f.typed[f.typed.length - 1], 'y\r', JSON.stringify(f.typed));
 });
+function confirmScript(afterYes) {
+  var s = boardScript({ 'X': 11 });
+  var head = '【板主:x】 看板《Test》';
+  s[10] = [head + '\n●   1 1/01 tester  □ 測試', { 'X': 11 }];
+  s.push([head + '\n●   1 1/01 tester  □ 測試\n作者本人, 使用 → 加註方式\n→ tester:', { '滾蛋\r': 'sure' }]);  // 11
+  s.sure = [head + '\n●   1 1/01 tester  □ 測試\n→ tester: 滾蛋\n確定要加入嗎？ [y/N]:', { 'y\r': 'after' }];
+  s.after = afterYes;
+  return s;
+}
+var PUSH_URL = 'https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html';
+testAsync('push 確定: the Enter after y opened the article (瀏覽 第) -> pushed', async function() {
+  var f = fakePtt(confirmScript([' 作者 tester\n→ tester: 滾蛋\n  瀏覽 第 1/1 頁 (100%)  (y)回應(X%)推文', {}]));
+  await f.ptt.login('tester', 'right');
+  await f.ptt.push(PUSH_URL, '3', '滾蛋');
+});
+testAsync('push 確定: the question gone, the list header unchanged -> pushed', async function() {
+  var f = fakePtt(confirmScript(['【板主:x】 看板《Test》\n●   1 1/01 tester  □ 測試', {}]));
+  await f.ptt.login('tester', 'right');
+  await f.ptt.push(PUSH_URL, '3', '滾蛋');
+});
+testAsync('push 確定: PTT refuses (推文太快) -> its words, and the screen is kept', async function() {
+  var f = fakePtt(confirmScript(['【板主:x】 看板《Test》\n●   1 1/01 tester  □ 測試\n推文太快，請稍候再試 請按任意鍵繼續', {}]));
+  await f.ptt.login('tester', 'right');
+  await assert.rejects(f.ptt.push(PUSH_URL, '3', '滾蛋'), /沒讓這則推文出去：推文太快/);
+  assert.ok(/推文太快/.test(f.ptt.lastFailure.screen), f.ptt.lastFailure.screen);
+});
+testAsync('push 確定: an article line saying 不能 is not a refusal', async function() {
+  var f = fakePtt(confirmScript([' 作者 tester\n我不能接受\n  瀏覽 第 1/1 頁 (100%)', {}]));
+  await f.ptt.login('tester', 'right');
+  await f.ptt.push(PUSH_URL, '3', '滾蛋');
+});
 testAsync('board: a push line left open on the bottom is emptied and closed before s', async function() {
   var s = LOGIN.slice(0, 4);
   var bs = new Array(81).join('\b') + '\r';

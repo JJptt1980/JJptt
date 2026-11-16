@@ -15,7 +15,11 @@ function JJPtt(app) {
   this.state = 'off';        // off / connecting / in
   this.queue = Promise.resolve();
   this.listeners = [];
+  // kept on the phone: the app may be closed by Android before 設定 is opened
+  try { this.lastFailure = JSON.parse(window.localStorage.getItem(JJPtt.FAIL_KEY) || 'null'); } catch (e) { this.lastFailure = null; }
 }
+
+JJPtt.FAIL_KEY = 'jjptt.m.lastFailure';
 
 JJPtt.STEP_MS = 50;
 JJPtt.KICK_KEY = 'jjptt.m.kickOthers';
@@ -81,6 +85,7 @@ JJPtt.prototype.run = function(job) {
   var self = this;
   var p = this.queue.then(job, job).catch(function(err) {
     self.lastFailure = { at: Date.now(), message: (err && err.message) || String(err), screen: self.screen() };
+    try { window.localStorage.setItem(JJPtt.FAIL_KEY, JSON.stringify(self.lastFailure)); } catch (e) {}
     throw err;
   });
   this.queue = p.catch(function() {});
@@ -579,14 +584,44 @@ JJPtt.prototype.push = function(url, kind, text) {
       return self.wait({ confirm: /確定.*\[y\/n\]|確定要/i, done: /文章選讀/ }, 8000, before, '送出推文');
     }).then(function(k) {
       if (k !== 'confirm') return;
-      var before = self.screen();
-      self.send('y\r');
-      return self.wait({ done: /文章選讀|看板《/ }, 8000, before).catch(function() {
-        throw new Error('不確定有沒有推出去，請重新整理看看');
-      });
+      return self.confirmPush();
     }).then(function() {
       return JJPtt.sleep(300);
     });
+  });
+};
+
+// The bottom line with something on it.
+JJPtt.prototype.lastLine = function() {
+  var lines = this.screen().split('\n').filter(function(l) { return l.trim(); });
+  return (lines[lines.length - 1] || '').trim();
+};
+
+JJPtt.CONFIRM = /確定.*\[y\/n\]|確定要/i;
+
+// Answers the push's 確定 question. PTT's answer can be the list again
+// (文章選讀), the article (瀏覽 第: when the question took y alone, the
+// Enter opened it), a message to get past, or just the question gone from
+// the bottom line; a refusal (推文太快…) is passed on in PTT's words.
+JJPtt.prototype.confirmPush = function() {
+  var self = this;
+  var before = this.screen();
+  var lastBefore = this.lastLine();
+  this.send('y\r');
+  // only the bottom line, newly changed: an article's own text is not PTT's answer
+  var bottom = function(re) {
+    return { test: function() { var l = self.lastLine(); return l !== lastBefore && re.test(l); } };
+  };
+  return this.wait({
+    no: bottom(/太快|間隔|禁止|無法|不能|失敗|權限/),
+    hurdle: bottom(/按任意鍵|請按任意鍵|按任一鍵/),
+    done: /文章選讀|瀏覽 第/,
+    gone: { test: function() { return self.screen() !== before && !JJPtt.CONFIRM.test(self.lastLine()); } }
+  }, 8000, before, '確定推文').then(function(k) {
+    if (k === 'no') throw new Error('PTT 沒讓這則推文出去：' + self.lastLine().replace(/\s+/g, ' ').slice(0, 40));
+    if (k === 'hurdle') self.send(' ');
+  }, function() {
+    throw new Error('不確定有沒有推出去，請重新整理看看（PTT 最後一行：' + self.lastLine().replace(/\s+/g, ' ').slice(0, 30) + '）');
   });
 };
 

@@ -83,11 +83,7 @@ JJMobile.prototype.renderSettings = function(screen) {
   if (this.ptt.lastFailure) {
     var lf = this.ptt.lastFailure;
     acc.appendChild(this.setRow('最後一次 PTT 畫面（除錯用）', this.shortTime(new Date(lf.at).toISOString()) + '・' + lf.message, function() {
-      var pre = JJMobile.el('pre', 'jjm-screen', lf.screen.replace(/\s+$/gm, ''));
-      var box = JJMobile.el('div', '');
-      box.appendChild(JJMobile.el('div', 'jjm-hint', '背景連線失敗時 PTT 的畫面。截圖給開發者看，就知道哪裡卡住。'));
-      box.appendChild(pre);
-      self.showSheet('最後一次 PTT 畫面', box);
+      self.pttScreenSheet();
     }));
   }
   if (this.ptt.lastLogin) {
@@ -1068,4 +1064,31 @@ JJMobile.prototype.factRows = function(box, screen) {
     }
   });
   dropEmpty();
+};
+
+// The hidden PTT screen at the last failure (push, reply, post, login).
+JJMobile.prototype.pttScreenSheet = function() {
+  var lf = this.ptt && this.ptt.lastFailure;
+  if (!lf) return;
+  var box = JJMobile.el('div', '');
+  box.appendChild(JJMobile.el('div', 'jjm-hint', '背景連線失敗時 PTT 的畫面（' + this.shortTime(new Date(lf.at).toISOString()) + '・' + lf.message + '）。截圖給開發者看，就知道哪裡卡住。'));
+  box.appendChild(JJMobile.el('pre', 'jjm-screen', String(lf.screen || '').replace(/\s+$/gm, '')));
+  this.showSheet('最後一次 PTT 畫面', box);
+};
+
+// A failure's message with a button that shows that screen right there
+// (not in a sheet: a reply's sheet would close and lose what was typed).
+JJMobile.prototype.failureNote = function(target, message) {
+  var lf = this.ptt && this.ptt.lastFailure;
+  target.textContent = message;
+  if (!lf) return;
+  var pre = null;
+  var btn = JJMobile.button('jjm-fail-btn', '看 PTT 畫面', function() {
+    if (pre) { pre.remove(); pre = null; btn.textContent = '看 PTT 畫面'; return; }
+    pre = JJMobile.el('pre', 'jjm-screen', String(lf.screen || '').replace(/\s+$/gm, ''));
+    target.appendChild(pre);
+    btn.textContent = '收起畫面';
+  });
+  target.appendChild(document.createTextNode(' '));
+  target.appendChild(btn);
 };

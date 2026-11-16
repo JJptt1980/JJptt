@@ -217,6 +217,8 @@ JJMobile.prototype.composer = function(screen) {
   // a quiet button like the rest (not a blue link, the only one in the app)
   var reply = JJMobile.iconButton('jjm-btn jjm-btn-quiet', 'edit', '回文到看板…', function() { self.replySheet(screen); });
   box.appendChild(reply);
+  var fail = el('div', 'jjm-form-error');
+  box.appendChild(fail);
 
   var max = function() { return JJPtt.pushMaxBytes(self.ptt.user || 'abcdefghijkl'); };
   var update = function() {
@@ -237,11 +239,14 @@ JJMobile.prototype.composer = function(screen) {
     var go = function() {
       send.disabled = true;
       send.textContent = '送出中…';
+      fail.textContent = '';
       self.ptt.push(screen.url, kind, text).then(function() {
         input.value = '';
         self.reloadAfterPost(screen, { id: self.ptt.user, text: text, kind: kind });
       }).catch(function(err) {
         if (self.app.showToast) self.app.showToast(err.message, 4000);
+        // stays under the box, with the PTT screen a tap away
+        self.failureNote(fail, err.message);
       }).then(function() {
         send.disabled = false;
         send.textContent = '送出';
@@ -283,7 +288,7 @@ JJMobile.prototype.replySheet = function(screen) {
       }).catch(function(e2) {
         go.disabled = false;
         go.textContent = '發表回文';
-        err.textContent = e2.message;
+        self.failureNote(err, e2.message);
       });
     });
     self.showSheet('回文：' + ((screen.article && screen.article.meta['標題']) || ''), form);
@@ -395,7 +400,7 @@ JJMobile.prototype.postSheet = function(screen) {
       }).catch(function(e2) {
         go.disabled = false;
         go.textContent = '發表文章';
-        err.textContent = e2.message + '（內容已存成草稿）';
+        self.failureNote(err, e2.message + '（內容已存成草稿）');
       });
     });
     self.showSheet('發文到 ' + board, form);
