@@ -289,7 +289,7 @@ locale.zh_TW = {
     "message": "仿 NetTerm（懷舊）"
   },
   "options_frameStyleKkman": {
-    "message": "仿 KKMan（懷舊）"
+    "message": "柯柯人（懷舊）"
   },
   "frame_wip": {
     "message": "施工中"

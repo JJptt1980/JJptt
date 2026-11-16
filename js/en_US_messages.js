@@ -289,7 +289,7 @@ locale.en_US = {
     "message": "NetTerm-like (retro)"
   },
   "options_frameStyleKkman": {
-    "message": "KKMan-like (retro)"
+    "message": "Kokoren (retro)"
   },
   "frame_wip": {
     "message": "Under construction"
