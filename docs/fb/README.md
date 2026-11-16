@@ -10,9 +10,10 @@
 |---|---|---|
 | 大頭貼 | `fb-avatar.png` | 1200×1200（臉書會裁成圓形，四周已留邊） |
 | 封面相片 | `fb-cover.png` | 1640×624（字和手機都在中間，手機上左右被裁掉也看得到） |
-| 第 1 篇貼文 | `../images/android-cover.png` | 1080×1350 |
-| 第 2 篇貼文 | `../images/android-fact.png` ＋ `../images/app-pushes.png` | |
-| 第 3 篇貼文 | `../images/reader-factcheck.png` | |
+| 第 1 篇貼文 | `post1-intro.png` | 1080×1350 |
+| 第 2 篇貼文 | `post2-fact-1.png` ＋ `post2-fact-2.png` | 兩張一起發 |
+| 第 3 篇貼文 | `post3-desktop.png` | |
+| 第 4 篇貼文 | `post4-ios.png` | 可不配圖 |
 
 ## 粉專基本資料
 
