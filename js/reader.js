@@ -141,8 +141,65 @@ PttReader.prototype.onTerminalUpdate = function() {
       return;
     }
   }
+  // back on the article just pushed to: the terminal shows the new push,
+  // www.ptt.cc a moment later -- stay in the terminal until the web page
+  // has it, instead of covering it with the page from before
+  var pf = this.pushFrom;
+  if (pf && pf.key === key && Date.now() - pf.at < PttReader.PUSH_WAIT_MS) {
+    this.waitForPush(h, key);
+    return;
+  }
+  this.pushFrom = null;
   if (key === this.currentKey || key === this.dismissedKey || key === this.loadingKey) return;
   this.openFor(h, key);
+};
+
+PttReader.PUSH_WAIT_MS = 30000;
+PttReader.PUSH_POLL_MS = 2000;
+
+// Fetches the article (past caches) until it has more pushes than before,
+// then shows it if the terminal is still on it.
+PttReader.prototype.waitForPush = function(h, key) {
+  var self = this, pf = this.pushFrom;
+  if (pf.waiting) return;
+  pf.waiting = true;
+  var stillHere = function() {
+    if (self.pushFrom !== pf) return false;
+    self.trackTerminal();
+    var cur = self.lastHeader;
+    return self.app.buf.pageState == 3 && cur && cur.key === key;
+  };
+  var url = pf.url || ((this.lastHeader && this.lastHeader.key === key) ? this.lastUrl : '');
+  var last = null;
+  var done = function(article) {
+    if (!stillHere()) return;
+    self.pushFrom = null;
+    if (!article) {
+      self.dismissedKey = key;  // stays in the terminal
+      return;
+    }
+    self.currentKey = key;
+    self.article = article;
+    self.render(article, h);
+    self.show();
+    self.restorePosition();
+  };
+  if (!url) return done(null);
+  var round = function() {
+    if (!stillHere()) {
+      if (self.pushFrom === pf) pf.waiting = false;
+      return;
+    }
+    if (Date.now() - pf.at > PttReader.PUSH_WAIT_MS) return done(last);
+    self.fetchArticle(url + (url.indexOf('?') < 0 ? '?' : '&') + '_=' + Date.now()).then(function(article) {
+      last = article;
+      if (article.pushes.length > pf.count) return done(article);
+      setTimeout(round, PttReader.PUSH_POLL_MS);
+    }, function() {
+      setTimeout(round, PttReader.PUSH_POLL_MS);
+    });
+  };
+  round();
 };
 
 // ---- fetching ------------------------------------------------------------
@@ -725,6 +782,9 @@ PttReader.prototype.closeAndSend = function(keys) {
   if (this.listSnap && keys === PttReader.KEYS_NEXT) this.listSnap.index++;
   if (keys === PttReader.KEYS_PREV) this.navDir = -1;
   if (keys === PttReader.KEYS_NEXT) this.navDir = 1;
+  // X / % push: when PTT shows the article again, wait for the push on the web
+  this.pushFrom = (keys === 'X' || keys === '%') && from && this.article ?
+    { key: from, at: Date.now(), count: this.article.pushes.length, url: this.article.url } : null;
   if (this.app.conn && this.app.conn.send) this.app.conn.send(keys);
 };
 

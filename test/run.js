@@ -1249,6 +1249,42 @@ testAsync('board: a push line left open on the bottom is emptied and closed befo
   await f.ptt.toBoard('Test');
   assert.deepStrictEqual(f.typed, [bs, 's', 'Test\r']);
 });
+testAsync('reader (extension): after X, back on the article -> waits for the push on the web, not the page from before', async function() {
+  var h = { board: 'Test', author: 'a', title: 't', key: 'Test|a|t' };
+  var r = Object.create(PttReader.prototype);
+  var sent = [], fetched = [], shown = [], opened = 0, n = 0;
+  r.app = { buf: { pageState: 3 }, conn: { send: function(k) { sent.push(k); } }, setInputAreaFocus: function() {} };
+  r.enabled = true;
+  r.available = function() { return true; };
+  r.trackTerminal = function() { r.lastHeader = h; };
+  r.headerFromTerminal = function() { return h; };
+  r.close = function() {};
+  r.render = function(a) { shown.push(a.pushes.length); };
+  r.show = r.restorePosition = function() {};
+  r.openFor = function() { opened++; };
+  r.fetchArticle = function(url) {
+    fetched.push(url);
+    return Promise.resolve({ url: 'u', pushes: new Array(++n >= 2 ? 3 : 2) });
+  };
+  r.currentKey = h.key;
+  r.article = { url: 'https://www.ptt.cc/bbs/Test/M.1.A.1.html', pushes: [1, 2] };
+  var poll = PttReader.PUSH_POLL_MS;
+  PttReader.PUSH_POLL_MS = 5;
+  try {
+    r.closeAndSend('X');
+    r.app.buf.pageState = 0; r.onTerminalUpdate();  // the push prompt
+    r.app.buf.pageState = 3; r.onTerminalUpdate();  // the article again
+    r.onTerminalUpdate();                           // more redraws: one wait
+    await new Promise(function(res) { setTimeout(res, 60); });
+  } finally {
+    PttReader.PUSH_POLL_MS = poll;
+  }
+  assert.deepStrictEqual(sent, ['X']);
+  assert.strictEqual(opened, 0);
+  assert.deepStrictEqual(shown, [3]);
+  assert.strictEqual(fetched.length, 2);
+  assert.ok(/M\.1\.A\.1\.html\?_=\d+$/.test(fetched[0]), fetched[0]);
+});
 testAsync('board prompt: waits for 請輸入看板名稱, not the list header\'s 「選擇看板」', async function() {
   // straight from the list of another board, the prompt shows only after a while
   var s = LOGIN.slice(0, 4);
