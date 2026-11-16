@@ -36,7 +36,8 @@ flowchart LR
    - Computer: [Chrome extension](docs/desktop.en.md): step-by-step install, first use, updating, what to do when something goes wrong.
 3. **You see tags like 秒推 or 同網段 next to pushes and want to know what they mean**: [FACT guide](docs/fact.en.md). Start with "First, to be clear" and the "Glossary" at the top.
 4. **A new phone, a new computer, or you want a backup**: [Moving your settings](docs/settings-file.en.md).
-5. **What changed lately**: [Changelog](CHANGELOG.md) (in Chinese).
+5. **Can't find mail, editing your article or other PTT features in the app**: [PTT features JJptt doesn't do yet](docs/missing-features.en.md), each with what to do instead.
+6. **What changed lately**: [Changelog](CHANGELOG.md) (in Chinese).
 
 ## Who is steering the thread? JJptt shows you at a glance.
 

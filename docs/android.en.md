@@ -26,6 +26,10 @@ JJptt now has an Android app: download it and it works, nothing else to install.
 </p>
 <p align="center"><sub>FACT report ｜ what's odd about each push ｜ your push, at once ｜ live layout preview</sub></p>
 
+## What the app can't do yet
+
+Mail, editing or deleting your own articles, the archive (精華區), chat and voting aren't in the app yet. What to do instead, for each: **[PTT features JJptt doesn't do yet](missing-features.en.md)**.
+
 ## Download and update
 
 1. On your phone, open the [JJptt Android release page](https://github.com/killnopig/JJptt/releases/tag/android-stable) and tap `JJptt.apk` (about 10 MB). An APK is the install file for an Android app.

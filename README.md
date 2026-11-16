@@ -36,7 +36,8 @@ flowchart LR
    - 電腦：[Chrome 擴充功能版](docs/desktop.md)：一步一步安裝、第一次使用、怎麼更新、遇到問題怎麼辦。
 3. **看到推文旁邊有「秒推」「同網段」這些標記，想知道是什麼意思**：[FACT 說明](docs/fact.md)。建議先讀最前面的「先說清楚」和「名詞小辭典」。
 4. **要換手機、換電腦，或想備份設定**：[把設定搬到另一台](docs/settings-file.md)。
-5. **想知道最近改了什麼**：[更新紀錄](CHANGELOG.md)。
+5. **App 裡找不到看信、修改文章這些 PTT 功能**：[PTT 有、但 JJptt 還沒做的功能](docs/missing-features.md)，每一項都寫了現在可以怎麼辦。
+6. **想知道最近改了什麼**：[更新紀錄](CHANGELOG.md)。
 
 ## PTT 上誰在帶風向？JJptt 讓你一眼看穿。
 

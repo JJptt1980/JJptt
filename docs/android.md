@@ -32,6 +32,10 @@ JJptt 也有 Android App 了：下載就能用，不用另外裝東西。App 自
 
 一步一步怎麼做、哪些會搬哪些不會：**[把設定搬到另一台](settings-file.md)**。
 
+## App 還不能做的事
+
+看信、修改或刪除自己的文章、精華區、聊天、投票這些，App 還沒有。每一項現在可以怎麼辦：**[PTT 有、但 JJptt 還沒做的功能](missing-features.md)**。
+
 ## 下載與更新
 
 1. 用手機打開 [JJptt Android 正式版下載頁](https://github.com/killnopig/JJptt/releases/tag/android-stable)，點 `JJptt.apk` 下載（約 10 MB）。APK 就是 Android App 的安裝檔。

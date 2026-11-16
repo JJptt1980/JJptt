@@ -26,6 +26,10 @@ JJptt に Android アプリができました。ダウンロードすればす�
 </p>
 <p align="center"><sub>FACT レポート ｜ 各プッシュの疑わしい点 ｜ 送ったらすぐ表示 ｜ レイアウトのプレビュー</sub></p>
 
+## アプリでまだできないこと
+
+メール、自分の記事の編集・削除、精華區、チャット、投票などは、アプリにはまだありません。それぞれの代わりの方法：**[PTT にあって JJptt にまだない機能](missing-features.ja.md)**。
+
 ## ダウンロードと更新
 
 1. スマホで [JJptt Android 正式版のダウンロードページ](https://github.com/killnopig/JJptt/releases/tag/android-stable) を開き、`JJptt.apk` をタップしてダウンロードします（約10MB）。APK は Android アプリのインストール用ファイルです。
