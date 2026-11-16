@@ -1246,7 +1246,7 @@ input.jj-color { width: 80px !important; height: 34px; padding: 2px; }
 .jjt-root .jjt-push[data-jj-rp] .q11,
 .jjt-root .jjt-push[data-jj-rp] .q3 { color: var(--jj-rp) !important; }
 
-/* 真.事實查核中心: three sections, aligned like the other tabs */
+/* 真.事實查核: three sections, aligned like the other tabs */
 #tabContentBlacklist .list-group-item-text > div { margin-left: 0; }
 #tabContentBlacklist .list-group { margin-bottom: 24px; }
 #tabContentBlacklist textarea { max-width: 520px; }
@@ -1254,7 +1254,7 @@ input.jj-color { width: 80px !important; height: 34px; padding: 2px; }
 
 .jj-reopen { color: #111; font-weight: bold; margin: 0 0 6px; }
 
-/* 真.事實查核中心 report above the pushes */
+/* 真.事實查核 report above the pushes */
 .jjt-root .jjt-fact {
   margin: 6px 0 10px; padding: 8px 12px; border: 1px solid #5a3a00; border-radius: 8px;
   background: #1a1306; color: #f0d9a8; font-size: 0.75em; line-height: 1.6; white-space: normal;
@@ -1509,7 +1509,7 @@ body.jj-mobile .jjm {
 .jjm .jjr-card-text { min-width: 0; font-size: var(--f-md); line-height: 1.4; }
 .jjm .jjr-card-host { color: var(--sub); font-size: var(--f-sm); }
 
-/* 真.事實查核中心 report (built by PttReader.factReportNode): closed, one
+/* 真.事實查核 report (built by PttReader.factReportNode): closed, one
    compact line -- title, summary, a small AI button, 展開 */
 .jjm .jjm-fact {
   margin: 8px 14px 2px; padding: 7px 10px; border-radius: var(--r-md); background: #241f14; border: 1px solid #5c4b1f;

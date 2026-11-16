@@ -207,7 +207,7 @@ JJMobile.prototype.renderSettings = function(screen) {
     function(id) { self.app.doSetUserNote(id); }, function(id) { self.app.doRemoveUserNote(id); }, screen));
 
   // fact check (from the extension's settings page)
-  var fc = section('fact', '真.事實查核中心 FACT', '文章推文上方那一條「FACT」。標出來的只是疑點，不代表一定是網軍。');
+  var fc = section('fact', '真.事實查核 FACT', '文章推文上方那一條「FACT」。標出來的只是疑點，不代表一定是網軍。');
   this.factRows(fc, screen);
   if (pref.values.aiService !== undefined && typeof PREF_OPTIONS !== 'undefined' && PREF_OPTIONS.aiService) {
     fc.appendChild(this.choiceRow('aiService', '「請 AI 分析」用哪一個',
@@ -218,7 +218,7 @@ JJMobile.prototype.renderSettings = function(screen) {
     fc.appendChild(this.textRow('aiPrompt', '要問 AI 的話',
       '%s 會換成選取的文字或文章；留空 = 只送出內容'));
   }
-  this.aboutFact(section('fact', '關於 真.事實查核中心 FACT'));
+  this.aboutFact(section('fact', '關於 真.事實查核 FACT'));
 
   // about
   var ab = section('about', '關於');
@@ -878,7 +878,7 @@ JJMobile.prototype.aboutFact = function(box) {
   var el = JJMobile.el;
   var head = el('div', 'jjm-set jjm-set-col jjm-fact-about');
   head.appendChild(el('div', 'jjm-fact-name', 'FACT'));
-  head.appendChild(el('div', 'jjm-set-sub', 'Facts, Accuracy, Credibility & Truth・真.事實查核中心'));
+  head.appendChild(el('div', 'jjm-set-sub', 'Facts, Accuracy, Credibility & Truth・真.事實查核'));
   head.appendChild(el('div', 'jjm-fact-motto', 'Evidence over opinion. 證據勝於立場'));
   var more = el('div', 'jjm-fact-more');
   more.style.display = 'none';

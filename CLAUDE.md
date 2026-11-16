@@ -36,7 +36,7 @@ Both native pieces only allow `ptt.cc` / `ptt2.cc` and fixed ports. `lib.isApp()
 
 **Analysis** — all run on every loaded article:
 - `push_insights.js` — floor numbers, IP country (`data/geoip-v4.bin`), same-IP, repeat-pusher colours (sets `data-jj-rp` / `--jj-rp`)
-- `fact_check.js` — 真.事實查核中心 FACT: per-article rules (秒推, 脈衝, 罐頭, 同網段, 機房 via `data/hosting-v4.bin`, 連推…) plus cross-article history (`FactHistory`, 共伴 / 首殺班底) in localStorage
+- `fact_check.js` — 真.事實查核 FACT: per-article rules (秒推, 脈衝, 罐頭, 同網段, 機房 via `data/hosting-v4.bin`, 連推…) plus cross-article history (`FactHistory`, 共伴 / 首殺班底) in localStorage
 - `spam_guard.js` — same URL in >3 articles in 24h → temporary blacklist
 
 Every FACT rule needs a setting in `index.html`, a `DEFAULT_PREFS` entry, and `options_<key>` in both `zh_TW_messages.js` and `en_US_messages.js`; a test checks this.

@@ -88,7 +88,7 @@ An "extension" is a small tool you add to your browser. JJptt keeps PTT's origin
 
 <sub>Demo screens; articles, accounts and IPs are fictional.</sub>
 
-## FACT (真.事實查核中心)
+## FACT (真.事實查核)
 
 **FACT = Facts, Accuracy, Credibility & Truth.** Evidence over opinion: we don't ask which side you're on, only what the facts are.
 

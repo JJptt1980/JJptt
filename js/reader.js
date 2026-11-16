@@ -1333,7 +1333,7 @@ PttReader.prototype.factReportNode = function(article) {
   var expanded = !!(pref && pref.values && pref.values.factReportCollapsed === false);
   if (!expanded) box.classList.add('jjt-fact-closed');
   var head = el('div', 'jjt-fact-head');
-  head.appendChild(el('span', 'jjt-fact-title', '真.事實查核中心'));
+  head.appendChild(el('span', 'jjt-fact-title', '真.事實查核'));
   var sum = PttReader.factSummary(lines), hostLine = sum.hostLine, kinds = sum.kinds;
   var sumEl = el('span', 'jjt-fact-sum');
   sumEl.title = '僅供參考，不代表一定是網軍';
@@ -1682,7 +1682,7 @@ PttReader.prototype.renderPushes = function(article) {
       tags.push(T.watch);
       if (level !== 'warn') level = 'watch';
     }
-    (fact.tags[i] || []).forEach(function(t) {  // 真.事實查核中心 rules
+    (fact.tags[i] || []).forEach(function(t) {  // 真.事實查核 rules
       if (t.lvl === 'grey') {  // weak hint: plain text, no ⚠
         parts.push(t.t);
         return;

@@ -394,7 +394,7 @@ JJMobile.acctLabel = function(user) {
   return user;
 };
 
-JJMobile.FACT_SHORT = 'FACT';  // Facts, Accuracy, Credibility & Truth = 真.事實查核中心
+JJMobile.FACT_SHORT = 'FACT';  // Facts, Accuracy, Credibility & Truth = 真.事實查核
 JJMobile.UI_KEY = 'jjptt.m.uiZoom';
 JJMobile.FLOOR_KEY = 'jjptt.m.floorColor';
 JJMobile.FLOOR_COLORS = [['灰（預設）', ''], ['白', '#e8ece4'], ['黃', '#ffd54f'], ['綠', '#9ccc65'],

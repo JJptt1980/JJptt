@@ -62,7 +62,7 @@ JJMobile.prototype.fillArticle = function(screen, article) {
         var rep = reader.factReportNode(article);
         if (rep) {
           rep.classList.add('jjm-fact');
-          // short on a phone: FACT = 真.事實查核中心 (設定 → 事實查核 says so)
+          // short on a phone: FACT = 真.事實查核 (設定 → 事實查核 says so)
           var ft = rep.querySelector('.jjt-fact-title');
           if (ft) ft.textContent = JJMobile.FACT_SHORT;
           var fa = rep.querySelector('.jjt-fact-ai');

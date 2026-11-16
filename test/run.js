@@ -1,7 +1,7 @@
 // JJptt tests: plain Node, no extra packages.  npm test
 //
 // Loads the browser source files into this context with a few stubs, then
-// checks the 真.事實查核中心 rules and the 連推 / 臨時黑名單 behaviour.
+// checks the 真.事實查核 rules and the 連推 / 臨時黑名單 behaviour.
 'use strict';
 var fs = require('fs');
 var path = require('path');

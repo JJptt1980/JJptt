@@ -224,7 +224,7 @@ locale.zh_TW = {
     "message": "自動登入與其他"
   },
   "options_blacklist": {
-    "message": "真.事實查核中心"
+    "message": "真.事實查核"
   },
   "options_extensions": {
     "message": "額外功能"
@@ -607,7 +607,7 @@ locale.zh_TW = {
     "message": "推文幾則以上才變色（最少 2）"
   },
   "options_factReport": {
-    "message": "閱讀模式在推文上方顯示「真.事實查核中心」報告（含「請 AI 分析推文風向」按鈕）"
+    "message": "閱讀模式在推文上方顯示「真.事實查核」報告（含「請 AI 分析推文風向」按鈕）"
   },
   "options_factReportMinPushes": {
     "message": "推文至少幾則才顯示報告框"

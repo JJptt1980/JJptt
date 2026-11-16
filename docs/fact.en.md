@@ -1,4 +1,4 @@
-# FACT (真.事實查核中心)
+# FACT (真.事實查核)
 
 [中文](fact.md) | **English** | [日本語](fact.ja.md)
 
@@ -132,7 +132,7 @@ Besides the automatic rules you keep three lists yourself:
 
 | | Each rule's switch and numbers | Automatic blacklist, lists |
 |---|---|---|
-| **Chrome extension** | Right-click on the screen → 設定 (Settings) →「真.事實查核中心」→ 自動偵測 (detection) | 名單 (lists), at the top of the same page |
+| **Chrome extension** | Right-click on the screen → 設定 (Settings) →「真.事實查核」→ 自動偵測 (detection) | 名單 (lists), at the top of the same page |
 | **Android app** | 設定 →「真.事實查核」 | 設定 →「黑名單」→ 自動黑名單 |
 
 The rules and lists you set up on your computer can be saved as a file and moved to your phone (or the other way round), with no need to set them up again: [Moving your settings](settings-file.en.md).

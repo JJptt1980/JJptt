@@ -224,7 +224,7 @@ locale.en_US = {
     "message": "Auto login & more"
   },
   "options_blacklist": {
-    "message": "Fact check center"
+    "message": "True Fact Check (FACT)"
   },
   "options_extensions": {
     "message": "Extensions"

@@ -88,7 +88,7 @@ flowchart LR
 
 <sub>画面はすべてデモです。記事・アカウント・IPは架空のものです。</sub>
 
-## FACT（真.事實查核中心）
+## FACT（真.事實查核）
 
 **FACT = Facts, Accuracy, Credibility & Truth（事実・正確・信頼・真実）。** 立場より証拠：どちらの側かは問わず、事実だけを問います。
 

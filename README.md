@@ -78,7 +78,7 @@ flowchart LR
 
 ![閱讀模式：保留 PTT 原本的樣子，圖片直接顯示在文章裡](docs/images/reader.png)
 
-![真.事實查核中心：推文上方有一份報告，每則推文旁標出秒推、同網段、機房、罐頭等疑點](docs/images/reader-factcheck.png)
+![真.事實查核：推文上方有一份報告，每則推文旁標出秒推、同網段、機房、罐頭等疑點](docs/images/reader-factcheck.png)
 
 - **閱讀模式**：圖片、影片、新聞夾在文章裡；下一篇先幫你讀好。
 - **越用越順手**：最新的文章排最上面；選一段文字就能問 AI。
@@ -88,7 +88,7 @@ flowchart LR
 
 <sub>以上畫面都是示範，文章、帳號與 IP 都是虛構的。</sub>
 
-## FACT 真.事實查核中心
+## FACT 真.事實查核
 
 **FACT = Facts, Accuracy, Credibility & Truth（事實、準確、可信、真相）。** 證據勝於立場：不問立場，只問事實。
 
@@ -97,7 +97,7 @@ flowchart LR
 - **證據公開**：每個標記都說得出為什麼，點開報告就看得到。
 - **可以更正**：標錯了可以一鍵移除，每條規則都能自己開關、調整。
 
-![FACT 真.事實查核中心：Evidence over opinion，公開透明、標準一致、不偏不倚、證據優先、勇於更正](docs/images/fact.png)
+![FACT 真.事實查核：Evidence over opinion，公開透明、標準一致、不偏不倚、證據優先、勇於更正](docs/images/fact.png)
 
 👉 **[FACT 說明](docs/fact.md)**：每個標記是什麼意思、為什麼可疑、被自動加進黑名單的規則、標錯了怎麼辦
 

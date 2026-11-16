@@ -1,4 +1,4 @@
-// JJptt 真.事實查核中心: signs of coordinated pushing in one article.
+// JJptt 真.事實查核: signs of coordinated pushing in one article.
 //
 // Everything here is a hint ("疑似"), never proof. PTT push times only have
 // minutes, so "seconds after posting" means "in the same or next minutes".
