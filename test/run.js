@@ -1380,6 +1380,34 @@ test('custom list: the 連推 line shows the list name on the right, like a sing
   assert.ok(/fadesNoted\(id\)/.test(PttReader.prototype.renderPushes.toString()), 'reader does not fade the custom list');
   assert.ok(/fadesNoted\(id\)/.test(JJMobile.prototype.pushInfo.toString()), 'app does not fade the custom list');
 });
+test('reader: space past the end of the last article goes back to the list, not to the same article in the terminal', function() {
+  var sent = [], opened = [];
+  var r = Object.create(PttReader.prototype);
+  var h = { board: 'Gossiping', author: 'ztopip', title: '[新聞]翡翠' };
+  var key = h.board + '|' + h.author + '|' + h.title;
+  r.enabled = true;
+  r.currentKey = key; r.loadingKey = ''; r.dismissedKey = '';
+  r.listSnap = { board: 'Gossiping', rows: [{}, {}], index: 1 };
+  r.app = { buf: { pageState: 3 }, conn: { send: function(k) { sent.push(k); } } };
+  r.available = function() { return true; };
+  r.trackTerminal = function() {};
+  r.dismiss = function() { this.dismissedKey = this.currentKey; this.currentKey = ''; };
+  r.openFor = function(hh, k) { opened.push(k); };
+  r.headerFromTerminal = function() { return h; };
+  r.closeAndSend(PttReader.KEYS_NEXT);  // the last article: PTT reopens the same one
+  r.onTerminalUpdate();
+  sameJson(sent, [PttReader.KEYS_NEXT, '\x1b[D']);
+  assert.strictEqual(r.listSnap.index, 1, 'list position moved past the end');
+  // a real next article opens in reading mode as before
+  sent = [];
+  r.app.buf.pageState = 2; r.onTerminalUpdate();
+  r.app.buf.pageState = 3; r.currentKey = key;
+  r.closeAndSend(PttReader.KEYS_NEXT);
+  h = { board: 'Gossiping', author: 'other', title: '[問卦]下一篇' };
+  r.onTerminalUpdate();
+  sameJson(sent, [PttReader.KEYS_NEXT]);
+  sameJson(opened, ['Gossiping|other|[問卦]下一篇']);
+});
 
 // ---- classic window frames (js/frame_style.js) ----------------------------
 vm.runInThisContext(fs.readFileSync(path.join(root, 'js/frame_style.js'), 'utf8'), { filename: 'js/frame_style.js' });
@@ -1578,6 +1606,30 @@ test('last page: the hidden pinned rows are filled with the articles before, up 
     assert.deepStrictEqual(shownNums(back), range(780705, 780724));
     assert.strictEqual(back.slotOfRow(lastRows.indexOf(lastRows.filter(function(t) { return /^>/.test(t); })[0])), 22);
     assert.strictEqual(sent.length, 2, 'no more keys once filled');
+  } finally {
+    console.log = log;
+  }
+});
+test('Z 搜尋推文數 question on the bottom row: the filled list stays, no keys typed into the answer', function() {
+  var log = console.log; console.log = function() {};
+  try {
+    var sent = [];
+    var lastRows = listScreen(range(780708, 780724), 3, 780724);
+    var v = listView(lastRows, sent);
+    v.updateListMap();
+    listView(listScreen(range(780688, 780707), 0, 780704), sent, v.pinFillState).updateListMap();
+    listView(lastRows, sent, v.pinFillState).updateListMap();
+    sent.length = 0;
+    var asking = lastRows.slice();
+    asking[23] = '搜尋推文數高於多少 (<0則搜噓文數) 的文章: 10';
+    var q = listView(asking, sent, v.pinFillState);
+    q.updateListMap();
+    assert.deepStrictEqual(shownNums(q), range(780705, 780724), 'rows above the last page went blank');
+    assert.deepStrictEqual(sent, [], 'keys sent while the question is up');
+    // entering a board straight into the question: nothing typed either
+    var sent2 = [];
+    listView(asking, sent2).updateListMap();
+    assert.deepStrictEqual(sent2, []);
   } finally {
     console.log = log;
   }

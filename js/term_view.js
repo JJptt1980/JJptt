@@ -1169,13 +1169,27 @@ TermView.prototype = {
   // just before, remembered from earlier screens. Entering a board on such
   // a page with nothing remembered yet, look at the previous page once
   // (PageUp) and come back with ↓, like the newest-first list does.
+  // The list kind (文章列表, 系列文章, search results...) from the bottom row.
+  listKind: function() {
+    return this.buf.getRowText(this.buf.rows - 1, 0, 24).trim().split(/\s+/)[0] || '';
+  },
+
+  // A question on the bottom row instead of the status bar (Z 搜尋推文數, / 搜尋標題,
+  // a 跳至第幾項 ...): still the same list, not another kind of list, and
+  // nothing may be typed for it (PageUp / ↓ to fill the screen would go into
+  // the answer).
+  listPrompt: function() {
+    return /[:：]/.test(this.buf.getRowText(this.buf.rows - 1, 0, this.buf.cols));
+  },
+
   updateHiddenPinnedList: function() {
     var buf = this.buf;
     var first = 3, last = buf.rows - 2, slots = last - first + 1;
     var boardMatch = /看板《(\w+)》/.exec(buf.getRowText(0, 0, buf.cols));
-    var kind = buf.getRowText(buf.rows - 1, 0, 24).trim().split(/\s+/)[0] || '';
-    var listKey = (boardMatch ? boardMatch[1] : '') + '|' + kind;
     var st = this.pinFillState;
+    var prompt = this.listPrompt();
+    var kind = prompt && st ? st.board.split('|')[1] : this.listKind();
+    var listKey = (boardMatch ? boardMatch[1] : '') + '|' + kind;
     var entered = false;
     if (!st || st.board !== listKey) {
       st = this.pinFillState = { board: listKey, cache: {}, fill: 'start' };
@@ -1238,7 +1252,7 @@ TermView.prototype = {
     }
     this.listMap = { slotOf: slotOf, rowOf: rowOf, html: out, hidden: {}, reversed: false };
 
-    if (!this.conn) return;
+    if (!this.conn || prompt) return;  // never type into a question on the bottom row
     var conn = this.conn;
     // PTT's cursor on a hidden pinned post (↓ past the last article, or a
     // board that opens on a page of pinned posts only): nothing on screen
@@ -1353,9 +1367,10 @@ TermView.prototype = {
     var board = boardMatch ? boardMatch[1] : '';
     // the list kind (文章列表, 文摘, search results...) is on the bottom row:
     // each kind numbers its rows its own way, so each gets its own cache
-    var kind = buf.getRowText(buf.rows - 1, 0, 24).trim().split(/\s+/)[0] || '';
-    var listKey = board + '|' + kind;
     var st = this.revState;
+    var prompt = this.listPrompt();
+    var kind = prompt && st ? st.board.split('|')[1] : this.listKind();
+    var listKey = board + '|' + kind;
     var entered = false;
     if (!st || st.board !== listKey) {
       st = this.revState = { board: listKey, cache: {}, pinned: [], ws: 0, fill: 'start' };
@@ -1480,7 +1495,7 @@ TermView.prototype = {
     // be filled. The selection is then moved to the newest article with ↓
     // (one per article number): PTT's "jump to last" keys did not work
     // reliably here.
-    if (!this.conn) return;
+    if (!this.conn || prompt) return;  // never type into a question on the bottom row
     var conn = this.conn;
     var selText = buf.getRowText(selRow, 0, buf.cols);
     var selMatch = /^.\s*(\d+)\s/.exec(selText);

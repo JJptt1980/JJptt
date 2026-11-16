@@ -128,6 +128,19 @@ PttReader.prototype.onTerminalUpdate = function() {
   var h = this.headerFromTerminal();
   if (!h) return;
   var key = h.board + '|' + h.author + '|' + h.title;
+  // Moved to the previous / next article but PTT opened the same one again:
+  // it was the last (or first) in the list. Back to the list instead of
+  // showing it a second time in the terminal.
+  var nav = this.navFrom;
+  if (nav) {
+    this.navFrom = null;
+    if (nav.key === key && Date.now() - nav.at < 5000) {
+      if (this.listSnap && this.navDir) this.listSnap.index -= this.navDir;
+      this.navDir = 0;
+      if (this.app.conn && this.app.conn.send) this.app.conn.send('\x1b[D');
+      return;
+    }
+  }
   if (key === this.currentKey || key === this.dismissedKey || key === this.loadingKey) return;
   this.openFor(h, key);
 };
@@ -703,7 +716,10 @@ PttReader.prototype.navKeys = function(dir) {
 };
 
 PttReader.prototype.closeAndSend = function(keys) {
+  var from = this.currentKey || this.loadingKey;
   this.dismiss();
+  this.navFrom = (keys === PttReader.KEYS_PREV || keys === PttReader.KEYS_NEXT) && from ?
+    { key: from, at: Date.now() } : null;
   // keep the list position in step when moving to the previous / next one
   if (this.listSnap && keys === PttReader.KEYS_PREV) this.listSnap.index--;
   if (this.listSnap && keys === PttReader.KEYS_NEXT) this.listSnap.index++;
