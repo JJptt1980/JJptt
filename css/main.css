@@ -1418,6 +1418,8 @@ body.jj-mobile .jjm {
 .jjm-actions { display: flex; flex: 0 0 auto; align-items: center; }
 /* no back button (home): the title starts at the edge, not after an empty space */
 .jjm-bar.jjm-noback .jjm-title { padding-left: 10px; }
+/* fitBar: still too long at 12px -> two lines */
+.jjm-title.jjm-title-2 { white-space: normal; line-height: 1.15; max-height: 2.3em; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: keep-all; }
 .jjm .jjm-icon {
   width: 48px; height: 48px; border-radius: var(--r-pill); font-size: var(--f-2xl); text-align: center; line-height: 48px; color: var(--text);
 }
@@ -1467,7 +1469,7 @@ body.jj-mobile .jjm {
 .jjm .jjm-article { flex-direction: column; align-items: stretch; gap: calc(2px + var(--jjm-lgap, 12px) * .35); }
 .jjm-article-title { font-size: var(--jjm-lfs, var(--jjm-fs)); line-height: 1.4; font-weight: 500; }
 .jjm-article-meta { display: flex; align-items: center; gap: 10px; font-size: var(--f-sm); color: var(--sub); }
-.jjm-author { color: var(--sub); padding: 6px 8px; margin: -6px -8px; }
+.jjm-author { color: var(--sub); }
 .jjm .jjm-article { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* 版面 → 看板列表 → 字的大小 (--jjm-bfs, default 17px); the board's
    description one step smaller, not the tiny caption size */
@@ -1573,7 +1575,7 @@ body.jj-mobile .jjm {
 .jjm-endnav .jjm-btn { flex: 1 1 0; }
 
 /* account button, push box */
-.jjm .jjm-acct { width: auto; padding: 0 14px; font-size: var(--f-md); font-weight: 700; border-radius: var(--r-pill); height: 36px; line-height: 36px; margin-right: 4px; border: 1px solid var(--line); }
+.jjm .jjm-acct { width: auto; max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 14px; font-size: var(--f-md); font-weight: 700; border-radius: var(--r-pill); height: 36px; line-height: 36px; margin-right: 4px; border: 1px solid var(--line); }
 .jjm .jjm-acct-in { color: var(--accent); border-color: var(--accent); }
 .jjm-compose { margin: 16px 14px 0; padding: 14px; border-radius: var(--r-lg); background: var(--card); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .jjm-kinds { align-items: center; }

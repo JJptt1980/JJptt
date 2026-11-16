@@ -64,6 +64,7 @@ These are hard to spot by eye. JJptt marks them right next to the pushes.
 | 🤖 **Don't trust us? Ask an AI** | JJptt only points out what looks suspicious; whether you believe it is up to you. Hand the whole article to ChatGPT, Claude or another AI in one tap, or select a passage and ask "Is this true?" |
 | 🖼️ **Made for pictures** | On picture-heavy boards like Beauty, images are laid out right in the article, no clicking each one. The next article is loaded ahead with its images, so flipping through doesn't wait |
 | 🔒 **Nobody in between** | Connects straight to PTT, with no one else's server in the middle. Your ID and password stay on your own computer or phone |
+| 👍 **One-handed reading** | In the Android app, previous / next can be small buttons floating on the left or right edge of the screen, right under your thumb, so you can keep reading with one hand (Settings → 版面 (layout) → 內文 (text) → 「上一篇／回列表／下一篇 放在哪」; both sides can be on) |
 | 📖 **Easy to read** | Images, videos and news show right inside the article. The next article is loaded ahead, so it opens at once |
 | 🎨 **Pushes at a glance** | Floors, flags, and how many times one person pushed are all colour-coded. People you'd rather not read can go on a blacklist, faded or hidden |
 | 🔄 **Settings travel with you** | Settings on your computer can move to your phone. A layout you like on the phone becomes a short code you can share with friends |

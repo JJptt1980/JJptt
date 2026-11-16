@@ -143,6 +143,7 @@ JJMobile.prototype.setup = function() {
   reader.schedulePrefetch = function() {};
   this.ptt = new JJPtt(this.app);
   this.watchSelection();  // selected text in an article: 問 AI
+  window.addEventListener('resize', function() { self.fitBar(); });
   this.ptt.onChange(function(state) {
     var top = self.stack[self.stack.length - 1];
     if (top) self.setBar(top);
@@ -322,8 +323,55 @@ JJMobile.prototype.refreshVersion = function() {
     if (self.updateAvailable) self.installUpdate();
     else self.checkUpdate(true);
   });
+  b.setAttribute('data-full', text);
+  // too narrow (a long account name, big 介面文字): just the version
+  if (!this.updateNote && !this.updateAvailable) b.setAttribute('data-short', JJMobile.version(this.myBuild(), this.myVersion()));
   this.titleEl.innerHTML = '';
   this.titleEl.appendChild(b);
+  this.fitBar();
+};
+
+// The top bar's title (board name, search) and the home version button are
+// made smaller until they fit instead of ending in 「…」: down to 12px, then a
+// board title goes to two lines and the version drops 「・檢查更新」.
+JJMobile.prototype.fitBar = function() {
+  var self = this;
+  if (this.fitPending) return;
+  this.fitPending = true;
+  var run = function() {
+    self.fitPending = false;
+    var t = self.titleEl;
+    if (!t) return;
+    var shrink = function(node, min) {
+      node.style.fontSize = '';
+      var px = parseFloat(window.getComputedStyle(node).fontSize) || 20;
+      var over = function() { return node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight + 1; };
+      while (over() && px > min) {
+        px -= 1;
+        node.style.fontSize = px + 'px';
+      }
+      return !over();
+    };
+    var ver = t.querySelector('.jjm-verbtn');
+    t.classList.remove('jjm-title-2');
+    if (ver) {
+      if (ver.getAttribute('data-full')) ver.textContent = ver.getAttribute('data-full');
+      if (!shrink(ver, 11) && ver.getAttribute('data-short')) {
+        ver.textContent = ver.getAttribute('data-short');
+        shrink(ver, 11);
+      }
+      return;
+    }
+    if (!shrink(t, 12) && / /.test(t.textContent)) {  // two lines, broken at 「 · 」 (board / search)
+      t.classList.add('jjm-title-2');
+      if (!shrink(t, 11)) {  // still too long: one line, 12px, ends in 「…」
+        t.classList.remove('jjm-title-2');
+        t.style.fontSize = '12px';
+      }
+    }
+  };
+  if (window.requestAnimationFrame) window.requestAnimationFrame(run);
+  else setTimeout(run, 0);
 };
 
 JJMobile.prototype.installUpdate = function() {
@@ -406,6 +454,7 @@ JJMobile.prototype.setUiZoom = function(z) {
   this.uiZoom = z || 1;
   this.root.style.setProperty('--jjm-ui', String(this.uiZoom));
   JJMobile.store(JJMobile.UI_KEY, this.uiZoom);
+  this.fitBar();
 };
 
 // 內文行距: 1.2 to 2.4 times the text (default 1.65)
@@ -581,4 +630,5 @@ JJMobile.prototype.setBar = function(screen) {
     if (st === 'in') acct.classList.add('jjm-acct-in');
     add('settings', '設定', function() { self.open({ type: 'settings' }); });
   }
+  this.fitBar();
 };

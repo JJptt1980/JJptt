@@ -17,7 +17,7 @@ global.i18n = function(k) { return (locale.zh_TW[k] && locale.zh_TW[k].message) 
 global.$ = function() { return { length: 0 }; };
 global.lib = { safeGetItem: function(k) { return global.lib.store[k] || null; },
                safeSetItem: function(k, v) { global.lib.store[k] = v; }, store: {} };
-['js/string_util.js', 'js/predefined_config.js', 'js/fact_check.js', 'js/reader.js', 'js/mobile_ptt.js', 'js/mobile.js', 'js/mobile_article.js', 'js/pref.js', 'js/spam_guard.js'].forEach(function(f) {
+['js/string_util.js', 'js/predefined_config.js', 'js/fact_check.js', 'js/reader.js', 'js/mobile_ptt.js', 'js/mobile.js', 'js/mobile_article.js', 'js/mobile_board.js', 'js/pref.js', 'js/spam_guard.js'].forEach(function(f) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 });
 
@@ -647,6 +647,13 @@ test('門檻推文 off: no tags, but the first 10 are still remembered for 門�
 
 console.log('Android app (versions)');
 
+test('app search: 推文數 labels (爆文, 噓爆) and the quick buttons', function() {
+  assert.strictEqual(JJMobile.pushQueryLabel('100'), '爆文');
+  assert.strictEqual(JJMobile.pushQueryLabel('-100'), '噓爆');
+  assert.strictEqual(JJMobile.pushQueryLabel('20'), '推 ≥ 20');
+  assert.strictEqual(JJMobile.pushQueryLabel('-10'), '噓 ≥ 10');
+  assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, -100]);
+});
 test('version: JJptt\'s version and the run; before that 0.0.N', function() {
   assert.strictEqual(JJMobile.version(57, '1.33.0'), '1.33.0 (57)');
   assert.strictEqual(JJMobile.version(57), '0.0.57');

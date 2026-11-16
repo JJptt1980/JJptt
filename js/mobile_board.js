@@ -39,9 +39,10 @@ JJMobile.prototype.renderBoard = function(screen) {
   var el = JJMobile.el;
   var v = screen.view;
   var q = screen.query || '';
-  var qLabel = /^author:/.test(q) ? '作者 ' + q.slice(7) : /^recommend:/.test(q) ? '推文 ≥ ' + q.slice(10) : q;
+  var qLabel = /^author:/.test(q) ? '作者 ' + q.slice(7) : /^recommend:/.test(q) ? JJMobile.pushQueryLabel(q.slice(10)) : q;
   screen.title = screen.board + (q ? ' · ' + qLabel : '');
   this.titleEl.textContent = screen.title;
+  this.fitBar();
   screen.entries = [];
   screen.listNode = el('div', 'jjm-list jjm-articles');
   v.appendChild(screen.listNode);
@@ -123,9 +124,8 @@ JJMobile.prototype.appendEntry = function(screen, e) {
   e.who = who;
   this.styleAuthor(e);
   // the author's lists (黑名單, 觀察名單, 自訂名單) without copying the ID:
-  // tap the ID, or hold anywhere on the row
+  // hold the row (a tap on the ID opened it too easily while opening articles)
   if (e.author) {
-    JJMobile.tap(who, function() { self.userSheet(e.author, screen); });
     row.addEventListener('contextmenu', function(ev) {
       ev.preventDefault();
       self.userSheet(e.author, screen);
@@ -179,6 +179,16 @@ JJMobile.prototype.markRead = function(screen) {
   screen.entries.forEach(function(e) { if (e.row && read[e.url]) e.row.classList.add('jjm-read'); });
 };
 
+JJMobile.QUICK_PUSH = [[20, '推 ≥ 20'], [100, '爆文'], [-100, '噓爆']];
+
+// 推文數 search in the title: 爆文 / 噓爆 / 推 ≥ N / 噓 ≥ N
+JJMobile.pushQueryLabel = function(n) {
+  n = parseInt(n, 10);
+  if (n >= 100) return n === 100 ? '爆文' : '推 ≥ ' + n;
+  if (n <= -100) return n === -100 ? '噓爆' : '噓 ≥ ' + (-n);
+  return n < 0 ? '噓 ≥ ' + (-n) : '推 ≥ ' + n;
+};
+
 JJMobile.prototype.searchSheet = function(screen) {
   var self = this;
   var el = JJMobile.el;
@@ -214,6 +224,15 @@ JJMobile.prototype.searchSheet = function(screen) {
     input.value = String(pushN);
   }
   box.appendChild(input);
+  // one tap: the usual 推文數 searches (爆 = 100 推, 噓爆 = 噓比推多 100)
+  var quick = el('div', 'jjm-chips jjm-quick');
+  JJMobile.QUICK_PUSH.forEach(function(qk) {
+    quick.appendChild(JJMobile.button('jjm-chip', qk[1], function() {
+      self.closeSheet();
+      self.open({ type: 'board', board: screen.board, query: 'recommend:' + qk[0] });
+    }));
+  });
+  box.appendChild(quick);
   box.appendChild(el('button', 'jjm-btn jjm-btn-main', '搜尋'));
   box.addEventListener('submit', function(e) {
     e.preventDefault();
