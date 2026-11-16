@@ -329,6 +329,15 @@ TermView.prototype = {
       xNodeStr = '<x s="'+xNodeAttrS+'" h="'+xNodeAttrH+'"></x>';
     }
 
+    // JJptt: a block / triangle with two colours (ANSI art's 雙色字) is drawn
+    // as two exact shapes, the left half over the right, not two font glyphs.
+    var blockCls = TermView.BLOCK_CLASSES[char1];
+    if (blockCls && !hasXNode) {
+      s1 += '<span class="q' + fg2 + ' ' + bcValue + ' jjb2">';
+      s1 += '<i class="jjb ' + blockCls + '">' + char1 + '</i>';
+      if (fg != fg2) s1 += '<i class="jjb ' + blockCls + ' jjb-lh q' + fg + '"></i>';
+      return s1 + '</span>';
+    }
     s1 += '<span class="'+spanClass+'" t="'+char1+'"'+fwStyle+'>';
     if (hasXNode) {
       s1 += xNodeStr;
@@ -952,6 +961,7 @@ TermView.prototype = {
 
     this.updateCursorPos();
     this.updateFbSharingPos();
+    if (typeof JJFrame !== 'undefined') JJFrame.wrap();  // classic frame hugs the text
   },
 
   convertMN2XYEx: function(cx, cy) {
@@ -1200,6 +1210,10 @@ TermView.prototype = {
         if (!(b in st.cache)) break;
         before.unshift(b);
       }
+    } else if (pinnedCount && !normal.length && nums.length) {
+      // a page of pinned posts only (↓ held past the last article): show
+      // the newest remembered articles, not an empty list, until ↑ is back
+      before = nums.slice(0, room).reverse();
     }
 
     var slotOf = [], rowOf = [], out = [];
@@ -1237,6 +1251,15 @@ TermView.prototype = {
         st.unpinAt = now;
         console.log('JJptt list: cursor on a hidden pinned post, ↑ x' + pinnedAt + ' to the newest article');
         conn.send(new Array(pinnedAt + 1).join('\x1b[A'));
+      } else if (!st.unpinRetry) {
+        // ↓ held down: the ↑ was sent a moment ago and the cursor is back on
+        // a pinned post. Look again once the wait is over, or the screen
+        // stays on the hidden pinned posts after the key is let go.
+        var self = this;
+        st.unpinRetry = setTimeout(function() {
+          st.unpinRetry = null;
+          if (self.pinFillState === st) self.redraw(true);
+        }, 650 - (now - st.unpinAt));
       }
       return;
     }
@@ -2366,5 +2389,8 @@ TermView.BLOCK_CLASSES = {
   '\u2587': 'jjb-l7',                                           // ▇
   '\u258f': 'jjb-w1', '\u258e': 'jjb-w2', '\u258d': 'jjb-w3', // ▏▎▍
   '\u258c': 'jjb-w4', '\u258b': 'jjb-w5', '\u258a': 'jjb-w6', // ▌▋▊
-  '\u2589': 'jjb-w7'                                            // ▉
+  '\u2589': 'jjb-w7',                                           // ▉
+  '\u25e2': 'jjb-t1', '\u25e3': 'jjb-t2',                       // ◢◣
+  '\u25e4': 'jjb-t3', '\u25e5': 'jjb-t4',                       // ◤◥
+  '\u2571': 'jjb-d1', '\u2572': 'jjb-d2', '\u2573': 'jjb-d3'    // ╱╲╳
 };

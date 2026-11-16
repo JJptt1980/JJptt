@@ -1014,7 +1014,19 @@ span {
 #mainContainer i.jjb-w5 { background-size: 62.5% 100%; }
 #mainContainer i.jjb-w6 { background-size: 75% 100%; }
 #mainContainer i.jjb-w7 { background-size: 87.5% 100%; }
-/* rows and coloured spans fill the full line so backgrounds have no gaps */
+/* triangles ◢◣◤◥ and diagonals ╱╲╳ (the cell is square: two columns wide) */
+#mainContainer i.jjb-t1 { background-image: linear-gradient(to bottom right, transparent 50%, currentColor 50%); }
+#mainContainer i.jjb-t2 { background-image: linear-gradient(to bottom left, transparent 50%, currentColor 50%); }
+#mainContainer i.jjb-t3 { background-image: linear-gradient(to bottom right, currentColor 50%, transparent 50%); }
+#mainContainer i.jjb-t4 { background-image: linear-gradient(to bottom left, currentColor 50%, transparent 50%); }
+#mainContainer i.jjb-d1 { background-image: linear-gradient(to bottom right, transparent calc(50% - 1px), currentColor calc(50% - 1px), currentColor calc(50% + 1px), transparent calc(50% + 1px)); }
+#mainContainer i.jjb-d2 { background-image: linear-gradient(to bottom left, transparent calc(50% - 1px), currentColor calc(50% - 1px), currentColor calc(50% + 1px), transparent calc(50% + 1px)); }
+#mainContainer i.jjb-d3 { background-image:
+  linear-gradient(to bottom right, transparent calc(50% - 1px), currentColor calc(50% - 1px), currentColor calc(50% + 1px), transparent calc(50% + 1px)),
+  linear-gradient(to bottom left, transparent calc(50% - 1px), currentColor calc(50% - 1px), currentColor calc(50% + 1px), transparent calc(50% + 1px)); }
+/* a two-colour block: the left half's shape over the right half's */
+#mainContainer .jjb2 { position: relative; }
+#mainContainer i.jjb-lh { position: absolute; left: 0; top: 0; background-color: transparent; clip-path: inset(0 50% 0 0); }/* rows and coloured spans fill the full line so backgrounds have no gaps */
 #mainContainer > span > span { display: inline-block; vertical-align: top; height: var(--jj-ch, auto); }
 
 /* JJptt: adjustable default text colour */
@@ -1023,6 +1035,13 @@ span {
 #easyReadingReplyRow > span,
 .main .q7 {
   color: var(--jj-text-color, #c0c0c0);
+}
+/* ...but ANSI art keeps the real grey: a grey block next to a grey
+   background must be the same grey, or some cells look too white */
+#mainContainer > span > i.jjb,
+#mainContainer .q7 > i.jjb,
+#mainContainer i.jjb.q7 {
+  color: #c0c0c0;
 }
 input.jj-color { width: 80px !important; height: 34px; padding: 2px; }
 
@@ -1381,6 +1400,79 @@ input.jj-color { width: 80px !important; height: 34px; padding: 2px; }
 .jj-who-watch { color: #d58bff !important; font-weight: bold; }
 .jj-who-note { color: #4fd1e8 !important; font-weight: bold; }
 
+
+/* ---- Classic window frames (設定 → 版面 → 視窗風格, js/frame_style.js) ----
+   The frame fills the window; the terminal and the reader sit in its black
+   hole, whose edges JJFrame.measure() puts in --jj-ft / -fl / -fr / -fb. */
+body.jj-frame #BBSWindow {
+  top: var(--jj-ft, 0); left: var(--jj-fl, 0); right: var(--jj-fr, 0); bottom: var(--jj-fb, 0);
+  width: auto; height: auto;
+  /* the space around the text is desktop: clicks there reach the window
+     (the terminal still gets them) or the frame, which may sit under it */
+  pointer-events: none;
+}
+body.jj-frame #BBSWindow > * { pointer-events: auto; }
+/* the reader and the welcome screen take the hole wrap() measured */
+body.jj-frame #jjReader,
+#jjFrameSplash {
+  top: var(--jj-ht, 0); left: var(--jj-hl, 0); width: var(--jj-hw, 100%); height: var(--jj-hh, 100%);
+  right: auto; bottom: auto;
+}
+body.jj-frame #connectionAlert { margin-top: calc(var(--jj-ft, 0px) + 15px); }
+/* outside the frame: black, like the plain look (owner's choice) */
+body.jj-frame-netterm { background-color: #000; }
+#jjFrame {
+  position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+  -webkit-user-select: none; user-select: none; cursor: default;
+}
+#jjFrame svg { display: block; }
+
+/* NetTerm-like: Windows 3.1 grey, teal title bar */
+.jjf-netterm {
+  -webkit-font-smoothing: none;
+  font-family: Arial, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  background: #c0c0c0; color: #000;
+  border: 4px solid #c0c0c0; box-shadow: inset 0 0 0 1px #000;
+}
+.jjf-netterm .jjf-title { flex: 0 0 22px; background: #00a0a8; display: flex; align-items: center; border-bottom: 1px solid #000; }
+.jjf-netterm .jjf-box { width: 22px; height: 21px; background: #c0c0c0; border-right: 1px solid #000; display: flex; align-items: center; justify-content: center; }
+.jjf-netterm .jjf-box i { width: 12px; height: 3px; background: #fff; border: 1px solid #000; display: block; }
+.jjf-netterm .jjf-t { flex: 1; text-align: center; color: #fff; font: bold 13px Arial, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+.jjf-netterm .jjf-ar { width: 22px; height: 21px; background: #c0c0c0; border-left: 1px solid #000; box-shadow: inset 1px 1px #fff, inset -1px -1px #808080; font: 9px/21px Tahoma, sans-serif; text-align: center; }
+.jjf-netterm .jjf-menu { display: flex; flex: 0 0 auto; overflow: hidden; white-space: nowrap; gap: 18px; padding: 2px 8px; background: #fff; font: bold 13px Arial, sans-serif; border-bottom: 1px solid #000; }
+.jjf-netterm .jjf-menu u { text-decoration: underline; }
+.jjf-netterm .jjf-tools { display: flex; flex: 0 0 auto; overflow: hidden; padding: 3px 4px; border-bottom: 1px solid #808080; }
+.jjf-netterm .jjf-tb { flex: 0 0 auto; width: 30px; height: 28px; display: flex; align-items: center; justify-content: center; margin-right: 1px; background: #c0c0c0; border: 1px solid #000; box-shadow: inset 1px 1px #fff, inset -2px -2px #808080; }
+.jjf-netterm .jjf-tb svg { width: 20px; height: 18px; }
+.jjf-netterm .jjf-tb:active,
+.jjf-netterm .jjf-keys span:active,
+.jjf-netterm .jjf-vs b:active { box-shadow: inset 1px 1px #808080; }
+.jjf-netterm .jjf-gap { width: 10px; }
+.jjf-netterm .jjf-keys { display: flex; flex: 0 0 auto; overflow: hidden; gap: 2px; padding: 3px 4px; border-top: 1px solid #fff; border-bottom: 1px solid #808080; }
+.jjf-netterm .jjf-keys span { flex: 0 0 auto; min-width: 74px; padding: 1px 6px; text-align: center; font: bold 11px "PingFang TC", "Microsoft JhengHei", Tahoma, sans-serif; background: #c0c0c0; border: 1px solid #000; box-shadow: inset 1px 1px #fff, inset -1px -1px #808080; }
+.jjf-netterm .jjf-body { flex: 1; min-height: 0; display: flex; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+.jjf-netterm .jjf-hole { flex: 1; min-width: 0; background: #000; }
+.jjf-netterm .jjf-vs { width: 17px; display: flex; flex-direction: column; border-left: 1px solid #000; background: #c0c0c0 repeating-conic-gradient(#c0c0c0 0 25%, #e0e0e0 0 50%) 0 0 / 2px 2px; }
+.jjf-netterm .jjf-vs span { flex: 1; }
+.jjf-netterm .jjf-vs b { height: 17px; flex: 0 0 auto; background: #c0c0c0; border: 1px solid #000; box-shadow: inset 1px 1px #fff, inset -1px -1px #808080; font: 8px/15px Tahoma, sans-serif; text-align: center; box-sizing: border-box; }
+.jjf-netterm .jjf-vs b.jjf-th { height: 24px; margin-top: -1px; }
+.jjf-netterm .jjf-status { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; padding: 3px 4px; font: 11px Tahoma, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+.jjf-netterm .jjf-status span { border: 1px solid; border-color: #808080 #fff #fff #808080; padding: 1px 6px; }
+.jjf-netterm .jjf-status .jjf-g { flex: 1; min-height: 13px; }
+.jjf-netterm .jjf-status .jjf-led { width: 10px; height: 10px; padding: 0; margin: 0 4px; border-radius: 50%; border: 1px solid #600; background: radial-gradient(circle at 35% 35%, #ffe080, #c08000); }
+.jjf-netterm .jjf-status .jjf-led.on { background: radial-gradient(circle at 35% 35%, #ff8080, #c00000); }
+
+/* NetTerm-like welcome screen: big-pixel globe and gold letters */
+#jjFrameSplash {
+  position: fixed; z-index: 1030;   /* under Bootstrap's dialogs (1040+) */
+  background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+#jjFrameSplash .jjf-art { position: relative; width: 720px; height: 396px; flex: 0 0 auto; }
+#jjFrameSplash canvas { position: absolute; image-rendering: pixelated; image-rendering: crisp-edges; }
+#jjFrameSplash .jjf-globe { width: 396px; height: 396px; left: 162px; top: 0; }
+#jjFrameSplash .jjf-word { width: 720px; height: 192px; left: 0; top: 158px; }
+#jjFrameSplash .jjf-conn { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; color: #c0c0c0; font: 14px Menlo, Consolas, "PingFang TC", "Microsoft JhengHei", monospace; }
 
 /* ---- JJptt on phones (Android app: body.jj-mobile, js/mobile.js) ---- */
 /* No terminal: the app is .jjm (bar on top, one screen at a time). */

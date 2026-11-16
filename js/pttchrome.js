@@ -270,12 +270,14 @@ pttchrome.App.prototype.onConnect = function() {
   }, 1000);
   this.view.resetCursorBlink();
   if (this.alertBeforeUnload)   this.regExitAlert();
+  if (typeof JJFrame !== 'undefined') JJFrame.onConnect();
 };
 
 pttchrome.App.prototype.onData = function(data) {
 //dumpLog(DUMP_TYPE_LOG, "pttchrome onData");
   this.lastDataAt = Date.now();  // the app checks the connection is alive by it
   this.parser.feed(data);
+  if (typeof JJFrame !== 'undefined') JJFrame.onData();  // welcome screen goes
 
   if (!this.appFocused && this.view.enableNotifications) {
     // parse received data for waterball
@@ -310,6 +312,7 @@ pttchrome.App.prototype.onClose = function() {
 
   $('#connectionAlert').show();
   this.updateTabIcon('disconnect');
+  if (typeof JJFrame !== 'undefined') JJFrame.onClose();  // welcome screen off, light off
 };
 
 pttchrome.App.prototype.sendData = function(str) {
@@ -882,8 +885,9 @@ pttchrome.App.prototype.updateTabIcon = function(aStatus) {
 
 // use this method to get better window size in case of page zoom != 100%
 pttchrome.App.prototype.getWindowInnerBounds = function() {
-  var width = document.documentElement.clientWidth - this.view.bbsViewMargin * 2;
-  var height = document.documentElement.clientHeight - this.view.bbsViewMargin * 2;
+  var f = this.frameInsets(true);  // a classic window frame (js/frame_style.js)
+  var width = document.documentElement.clientWidth - f.left - f.right - this.view.bbsViewMargin * 2;
+  var height = document.documentElement.clientHeight - f.top - f.bottom - this.view.bbsViewMargin * 2;
   var bounds = {
     width: width,
     height: height
@@ -900,9 +904,20 @@ pttchrome.App.prototype.getFirstGridOffsets = function() {
   return offsets;
 };
 
+// The terminal's offset from the window's corner when a classic frame is on;
+// remeasure after the window changed size.
+pttchrome.App.prototype.frameInsets = function(remeasure) {
+  if (typeof JJFrame === 'undefined') return { top: 0, left: 0, right: 0, bottom: 0 };
+  if (remeasure) JJFrame.onResize();
+  return JJFrame.insets();
+};
+
 pttchrome.App.prototype.clientToPos = function(cX, cY) {
   var x;
   var y;
+  var f = this.frameInsets();
+  cX -= f.left;
+  cY -= f.top;
   var w = this.view.innerBounds.width;
   var h = this.view.innerBounds.height;
   if (this.view.horizontalAlignCenter && (this.view.scaleX != 1 || this.view.scaleY != 1)) {
@@ -1347,6 +1362,12 @@ pttchrome.App.prototype.onPrefChange = function(pref, name) {
       var margin = pref.get(name);
       this.view.bbsViewMargin = margin;
       this.onWindowResize();
+      break;
+    case 'frameStyle':
+      if (typeof JJFrame === 'undefined') break;
+      JJFrame.apply(this, pref.get(name));
+      this.onWindowResize();
+      if (this.reader && this.reader.isOpen && this.reader.isOpen()) this.reader.layout();
       break;
     case 'enableBlacklist':
     case 'hideBlacklisted':

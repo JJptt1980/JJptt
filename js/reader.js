@@ -1560,7 +1560,14 @@ PttReader.prototype.layout = function() {
   var chw = view.chw || 10, chh = view.chh || 20;
   var rows = (this.app.buf && this.app.buf.rows) || 24;
   this.lineHeight = chh;
-  var rect = view.mainDisplay.getBoundingClientRect();
+  var r0 = view.mainDisplay.getBoundingClientRect();
+  // Relative to the overlay, which a classic window frame (js/frame_style.js)
+  // puts over the terminal. Read from its style, not its box: render() lays
+  // it out before show(), while it is still display:none and has no box.
+  var ocs = getComputedStyle(o);
+  var oLeft = parseFloat(ocs.left) || 0, oTop = parseFloat(ocs.top) || 0;
+  var rect = { left: r0.left - oLeft, top: r0.top - oTop };
+  var ow = parseFloat(ocs.width) || (window.innerWidth - oLeft);
   var gutter = chw * (view.leftGutterCols ? view.leftGutterCols() : 0);
   page.style.fontFamily = getComputedStyle(view.mainDisplay).fontFamily;
   page.style.fontSize = chh + 'px';
@@ -1568,7 +1575,7 @@ PttReader.prototype.layout = function() {
   page.style.width = (chw * 80) + 'px';
   page.style.marginLeft = Math.max(0, rect.left + gutter) + 'px';
   page.style.paddingTop = '0px';
-  this.rightSpaceCols = Math.max(0, (window.innerWidth - (rect.left + gutter) - chw * 80) / chw);
+  this.rightSpaceCols = Math.max(0, (ow - (rect.left + gutter) - chw * 80) / chw);
   var boxH = chh * (rows - 1);
   var top = Math.max(0, rect.top);
   if (document.body.classList.contains('jj-mobile')) {

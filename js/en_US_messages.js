@@ -279,6 +279,24 @@ locale.en_US = {
   "options_bbsMargin": {
     "message": "Margins around BBS view (px)"
   },
+  "options_frameStyle": {
+    "message": "Window style"
+  },
+  "options_frameStylePlain": {
+    "message": "Plain (all black)"
+  },
+  "options_frameStyleNetterm": {
+    "message": "NetTerm-like (retro)"
+  },
+  "frame_wip": {
+    "message": "Under construction"
+  },
+  "frame_connecting": {
+    "message": "Connecting …"
+  },
+  "frame_motto": {
+    "message": "看 PTT，也看穿帶風向"
+  },
   "options_fontFitWindowWidth": {
     "message": "Stretch font to fill the view"
   },

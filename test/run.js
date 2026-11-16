@@ -1342,6 +1342,72 @@ test('every fact-check rule has Chinese and English text', function() {
   });
 });
 
+// ---- classic window frames (js/frame_style.js) ----------------------------
+vm.runInThisContext(fs.readFileSync(path.join(root, 'js/frame_style.js'), 'utf8'), { filename: 'js/frame_style.js' });
+test('視窗風格: setting, choices, page fields and text in both languages', function() {
+  assert.strictEqual(DEFAULT_PREFS.frameStyle, 0, 'plain (all black) stays the default');
+  assert.strictEqual(PREF_OPTIONS.frameStyle.length, JJFrame.STYLES.length);
+  var zh = fs.readFileSync(path.join(root, 'js/zh_TW_messages.js'), 'utf8');
+  var en = fs.readFileSync(path.join(root, 'js/en_US_messages.js'), 'utf8');
+  ['options_frameStyle', 'frame_wip', 'frame_connecting', 'frame_motto'].concat(PREF_OPTIONS.frameStyle).forEach(function(k) {
+    assert.ok(zh.indexOf('"' + k + '"') >= 0, k + ' missing from zh_TW_messages.js');
+    assert.ok(en.indexOf('"' + k + '"') >= 0, k + ' missing from en_US_messages.js');
+  });
+  assert.strictEqual(i18n('frame_wip'), '施工中');
+  ['index.html', 'dev.html'].forEach(function(f) {
+    assert.ok(fs.readFileSync(path.join(root, f), 'utf8').indexOf('id="opt_frameStyle"') >= 0, f + ' has no 視窗風格 field');
+  });
+});
+test('視窗風格: frame_style.js is built and loaded like the other files', function() {
+  var grunt = fs.readFileSync(path.join(root, 'Gruntfile.js'), 'utf8');
+  assert.strictEqual(grunt.split("'js/frame_style.js'").length - 1, 2, 'needs to be in concat.js and jshint.files');
+  assert.ok(fs.readFileSync(path.join(root, 'dev.html'), 'utf8').indexOf('js/frame_style.js') >= 0);
+});
+test('視窗風格: styles by number, no frame means no offset', function() {
+  assert.strictEqual(JJFrame.styleFor(0), '');
+  assert.strictEqual(JJFrame.styleFor(1), 'netterm');
+  assert.strictEqual(JJFrame.styleFor('1'), 'netterm');
+  assert.strictEqual(JJFrame.styleFor(7), '');
+  assert.deepStrictEqual(JJFrame.insets(), { top: 0, left: 0, right: 0, bottom: 0 });
+});
+test('視窗風格: mouse positions, the terminal size and the reader allow for the frame', function() {
+  var src = fs.readFileSync(path.join(root, 'js/pttchrome.js'), 'utf8');
+  var c2p = src.slice(src.indexOf('prototype.clientToPos'), src.indexOf('prototype.onMouse_click'));
+  assert.ok(/cX -= f\.left/.test(c2p) && /cY -= f\.top/.test(c2p), 'clientToPos ignores the frame');
+  var gib = src.slice(src.indexOf('prototype.getWindowInnerBounds'), src.indexOf('prototype.getFirstGridOffsets'));
+  assert.ok(/f\.left - f\.right/.test(gib) && /f\.top - f\.bottom/.test(gib), 'terminal size ignores the frame');
+  var lay = PttReader.prototype.layout.toString();
+  assert.ok(lay.indexOf('window.innerWidth - (rect.left') < 0, 'reader places itself by the window');
+  // render() lays the overlay out before show(): its box is still empty then
+  assert.ok(/getComputedStyle\(o\)/.test(lay) && !/o\.getBoundingClientRect\(\)/.test(lay), 'reader reads its place from a hidden box');
+});
+test('視窗風格: the welcome screen goes on the first data, at most once', function() {
+  var calls = [];
+  var realSetTimeout = global.setTimeout;
+  global.setTimeout = function(fn, ms) { calls.push(ms); };
+  try {
+    JJFrame.splashWaiting = true;
+    JJFrame.splashShownAt = Date.now();
+    JJFrame.onData();
+    JJFrame.onData();
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(JJFrame.SPLASH_MS, 3000, 'the owner asked for 3 seconds');
+    assert.ok(calls[0] > 2900 && calls[0] <= 3000, 'shown 3 seconds first');
+  } finally { global.setTimeout = realSetTimeout; JJFrame.splashWaiting = false; }
+});
+test('視窗風格: a failed connection drops the welcome screen so the error shows', function() {
+  var removed = false;
+  JJFrame.splashEl = { parentNode: { removeChild: function() { removed = true; } } };
+  JJFrame.splashWaiting = true;
+  JJFrame.onClose();
+  assert.ok(removed, 'welcome screen still covers the connection error');
+  assert.strictEqual(JJFrame.splashEl, null);
+  assert.strictEqual(JJFrame.splashWaiting, false);
+  var src = fs.readFileSync(path.join(root, 'js/pttchrome.js'), 'utf8');
+  var onClose = src.slice(src.indexOf('prototype.onClose'), src.indexOf('prototype.sendData'));
+  assert.ok(/JJFrame\.onClose\(\)/.test(onClose), 'App.onClose does not tell the frame');
+});
+
 test('the settings page does not wipe the temporary blacklist list', function() {
   var src = PttChromePref.prototype.updateSettingsToUi.toString();
   var skip = src.indexOf("i === 'tempBlacklist'"), wipe = src.indexOf("$('#opt_'+i).empty()");
@@ -1378,6 +1444,37 @@ test('expanded 機房 line names the accounts; the collapsed line does not', fun
 
 console.log('list: hide pinned posts');
 vm.runInThisContext(fs.readFileSync(path.join(root, 'js/term_view.js'), 'utf8'), { filename: 'js/term_view.js' });
+
+// ---- ANSI art: triangles and two-colour blocks drawn as exact shapes ------
+test('ANSI art: triangles and diagonals are drawn as shapes, not font glyphs', function() {
+  ['◢', '◣', '◤', '◥', '╱', '╲', '╳'].forEach(function(c) {
+    assert.ok(TermView.BLOCK_CLASSES[c], c + ' has no shape');
+  });
+  var css = fs.readFileSync(path.join(root, 'css/main.css'), 'utf8');
+  ['jjb-t1', 'jjb-t2', 'jjb-t3', 'jjb-t4', 'jjb-d1', 'jjb-d2', 'jjb-d3', 'jjb-lh'].forEach(function(k) {
+    assert.ok(css.indexOf('i.' + k + ' {') >= 0, k + ' has no CSS');
+  });
+});
+test('ANSI art: grey blocks keep the real grey, not the brighter text colour', function() {
+  var css = fs.readFileSync(path.join(root, 'css/main.css'), 'utf8');
+  var color = fs.readFileSync(path.join(root, 'css/color.css'), 'utf8');
+  var grey = /\.b7\{background-color:(#[0-9a-f]+);\}/.exec(color)[1];
+  var m = /#mainContainer > span > i\.jjb,\s*#mainContainer \.q7 > i\.jjb,\s*#mainContainer i\.jjb\.q7 \{\s*color: (#[0-9a-f]+);/.exec(css);
+  assert.ok(m, 'no grey rule for blocks');
+  assert.strictEqual(m[1], grey, 'a grey block must match a grey background');
+  assert.ok(css.indexOf(m[0]) > css.indexOf('color: var(--jj-text-color'), 'must come after the text colour rule');
+});
+test('ANSI art: a two-colour block is the right shape plus the left half, no font glyph', function() {
+  var fake = { setCurColorStyle: function() {}, closeSpanIfIsOpen: function() { return ''; }, deffg: 7, defbg: 0 };
+  var html = TermView.prototype.createTwoColorWord.call(fake, { blink: false }, { blink: false }, '█', 1, 3, 0, 4, 0);
+  assert.ok(/jjb2/.test(html) && /jjb jjb-f">/.test(html), html);
+  assert.ok(/jjb-lh q1"><\/i>/.test(html), 'left half not drawn in the left colour: ' + html);
+  assert.ok(!/ t="/.test(html), 'still drawn with the font overlay: ' + html);
+  assert.strictEqual(html.replace(/<[^>]+>/g, ''), '█', 'copy / column counting must see one character');
+  // ordinary two-colour characters keep the old way
+  var word = TermView.prototype.createTwoColorWord.call(fake, { blink: false }, { blink: false }, '中', 1, 3, 0, 0, 0);
+  assert.ok(/ t="中"/.test(word));
+});
 
 function listScreen(nums, pinnedCount, cursorNum) {
   var rows = ['【板主:x】 看板《Gossiping》', '', '   編號    日 期 作 者       文  章  標  題'];
@@ -1459,6 +1556,40 @@ test('cursor on a hidden pinned post: moved up to the newest article, not left t
     }
   } finally {
     console.log = log;
+  }
+});
+test('↓ held past the last article: the ↑ back is retried and the list is never blank', function() {
+  var log = console.log, realSetTimeout = global.setTimeout;
+  var timers = [];
+  console.log = function() {};
+  global.setTimeout = function(fn, ms) { timers.push({ fn: fn, ms: ms }); return timers.length; };
+  try {
+    var cache = {};
+    range(780705, 780724).forEach(function(n) { cache[n] = '<span type="bbsrow" srow="-1"> ' + n + ' cached</span>'; });
+    var st = { board: 'Gossiping|文章列表', cache: cache, fill: 'done' };
+    // a page of pinned posts only, the cursor on the first one
+    var only = listScreen([], 0, 0);
+    for (var p = 0; p < 4; ++p) only[3 + p] = (p === 0 ? '>' : ' ') + '  ★    11/12 mod      □ [公告] ' + p;
+    var sent = [];
+    var v = listView(only, sent, st);
+    v.updateListMap();
+    assert.deepStrictEqual(sent, ['\x1b[A'], 'first time: ↑ at once');
+    assert.deepStrictEqual(shownNums(v), range(780705, 780724), 'the newest remembered articles, not an empty list');
+    // still ↓ held: back on a pinned post right away, inside the wait
+    var redraws = 0;
+    var v2 = listView(only, sent, st);
+    v2.redraw = function() { redraws++; };
+    v2.updateListMap();
+    assert.strictEqual(sent.length, 1, 'no second ↑ inside the wait');
+    assert.strictEqual(timers.length, 1, 'but a look again is planned');
+    assert.ok(timers[0].ms > 0 && timers[0].ms <= 650);
+    v2.updateListMap();
+    assert.strictEqual(timers.length, 1, 'only one planned at a time');
+    timers[0].fn();
+    assert.strictEqual(redraws, 1, 'the screen is checked again after the wait');
+  } finally {
+    console.log = log;
+    global.setTimeout = realSetTimeout;
   }
 });
 

@@ -279,6 +279,24 @@ locale.zh_TW = {
   "options_bbsMargin": {
     "message": "BBS 周圍邊距 (像素)"
   },
+  "options_frameStyle": {
+    "message": "視窗風格"
+  },
+  "options_frameStylePlain": {
+    "message": "原本（全黑）"
+  },
+  "options_frameStyleNetterm": {
+    "message": "仿 NetTerm（懷舊）"
+  },
+  "frame_wip": {
+    "message": "施工中"
+  },
+  "frame_connecting": {
+    "message": "正在連線 …"
+  },
+  "frame_motto": {
+    "message": "看 PTT，也看穿帶風向"
+  },
   "options_fontFitWindowWidth": {
     "message": "把字體拉大來補滿畫面"
   },
