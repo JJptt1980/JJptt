@@ -262,9 +262,7 @@ JJMobile.prototype.renderHome = function(screen) {
     });
     bar.appendChild(b);
   });
-  bar.appendChild(JJMobile.iconButton('jjm-tab jjm-tab-sync', 'reload', this.ptt.state === 'in' ? '同步' : '同步 PTT', function() {
-    self.syncFavs(true);
-  }));
+  // no 同步 button: PTT's 我的最愛 comes in by itself after logging in
   v.appendChild(bar);
   setTimeout(function() {  // the chosen tab in view
     var on = bar.querySelector('.jjm-on');
@@ -275,7 +273,7 @@ JJMobile.prototype.renderHome = function(screen) {
   v.appendChild(list);
   if (!cur.hot) {
     if (!cur.boards.length) {
-      list.appendChild(el('div', 'jjm-hint', '在看板裡按右上角的 ☆ 加到這裡，或登入後按「同步」拿 PTT 的我的最愛。'));
+      list.appendChild(el('div', 'jjm-hint', '在看板裡按右上角的 ☆ 加到這裡，登入後也會自動拿 PTT 的我的最愛。'));
     }
     cur.boards.forEach(function(f) { list.appendChild(self.boardRow(f.name, JJPtt.cleanTitle(f.title), '')); });
   } else {

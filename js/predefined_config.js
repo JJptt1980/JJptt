@@ -94,6 +94,7 @@ var DEFAULT_PREFS = {
   factFloodRunChain : true,
   factFloodRunSkipAuthor : true,
   factFloodRunKeepRemoved : true,
+  factFloodRunBoards : '',
   readerGroupRuns : true,
   readerCollapseRuns : true,
   readerCollapseRunMin : 5,

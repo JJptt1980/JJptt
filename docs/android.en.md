@@ -10,7 +10,7 @@ JJptt now has an Android app: download it and it works, nothing else to install.
 
 - **FACT**: fast pushes, shared subnets, data-centre IPs… tagged right next to each push, and one tap hands the article to AI; accounts that flood fade out for 24 hours ([how the rules work](fact.en.md)).
 - **Push, reply, post**: your push shows up the moment PTT takes it (marked 「剛送出」, "just sent") — no waiting for PTT's web site (www.ptt.cc) to catch up.
-- **Easy reading**: images and news cards inside the article; previous / next can float on the left or right edge for one-handed reading; your PTT favourites sync in one tap.
+- **Easy reading**: images and news cards inside the article; previous / next can float on the left or right edge for one-handed reading; your PTT favourites come in by themselves when you log in.
 - **Your layout**: text size, line spacing and push style, with a live preview on top; a layout you like becomes a short code (設定 → 版面 →「複製碼」, Settings → Layout → Copy code) to share with friends.
 - **Same settings as the Chrome extension**: a settings file exported from the extension imports straight into the app, and the other way round ([how](settings-file.en.md)).
 - **Your account stays safe**: the password is locked in the phone's built-in safe (Android Keystore), stays on this phone and is never backed up to the cloud.

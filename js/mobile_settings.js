@@ -131,7 +131,7 @@ JJMobile.prototype.renderSettings = function(screen) {
 
   // reading
   var rd = section('general', '閱讀');
-  rd.appendChild(this.numberRow('readerPrefetchCount', '先讀好接下來幾篇', '0 = 不預先讀取，最多 10', 0, 10));
+  rd.appendChild(this.numberRow('readerPrefetchCount', '先讀好接下來幾篇', '0 = 不預先讀取，最多 20', 0, 20));
   rd.appendChild(this.toggleRow('readerPrefetchImages', '預先讀取時連圖片一起下載', '換篇更快，但流量多很多'));
   rd.appendChild(this.toggleRow('readerLowResImages', '用低解析度圖片', '載入快、省流量；點圖片看原圖'));
   rd.appendChild(this.toggleRow('hidePinned', '隱藏置底公告', '看板文章列表不顯示板規、公告那些置底文章'));
@@ -192,6 +192,7 @@ JJMobile.prototype.renderSettings = function(screen) {
   var ab0 = section('lists', '自動黑名單');
   this.autoBlackRules(ab0);
   ab0.appendChild(this.tempListRow(screen));
+  ab0.appendChild(this.autoLogRow(screen));
 
   var ls = section('lists', '名單');
   ls.appendChild(this.choiceRow('blacklistMode', '黑名單的人', [[0, '淡化'], [1, '隱藏'], [2, '不管']]));
@@ -265,7 +266,8 @@ JJMobile.prototype.fontChips = function(which) {
   var chips = el('div', 'jjm-chips');
   var now = which === 'text' ? self.fontPx : (self.fonts || {})[which] || null;
   var opts = [['小', 15], ['中', 17], ['大', 19], ['特大', 22]];
-  if (which !== 'text') opts.unshift(['同內文', null]);
+  if (which === 'boards') opts = [['小', 15], ['中', null], ['大', 19], ['更大', 22], ['特大', 26]];
+  else if (which !== 'text') opts.unshift(['同內文', null]);
   opts.forEach(function(f) {
     var b = JJMobile.button('jjm-chip' + (now === f[1] ? ' jjm-on' : ''), f[0], function() {
       self.setFontOf(which, f[1]);
@@ -378,12 +380,13 @@ JJMobile.prototype.demoBoards = function() {
 // 版面 presets: 預設, 開發者建議, and two of one's own. A look is every
 // 版面 setting in one object.
 JJMobile.LOOK_SLOTS_KEY = 'jjptt.m.looks';
-JJMobile.LOOK_DEFAULT = { text: 17, push: null, list: null, lh: 1.65, listGap: 12, pushGap: 10, inline: false,
+JJMobile.LOOK_DEFAULT = { text: 17, push: null, list: null, boards: null, lh: 1.65, listGap: 12, pushGap: 10, inline: false,
                           floor: '', nav: ['bottom'], ui: 1, tab: 10 };
 JJMobile.LOOK_DEV = { text: 22, push: 17, list: 19, lh: 1.65, listGap: 2, pushGap: 0, inline: false,
                       floor: '', nav: ['left', 'right'], ui: 0.9, tab: 30 };
 JJMobile.prototype.getLook = function() {
   return { text: this.fontPx, push: (this.fonts || {}).push || null, list: (this.fonts || {}).list || null,
+           boards: (this.fonts || {}).boards || null,
            lh: this.lineHeight || 1.65, listGap: this.listGap, pushGap: this.pushGap, inline: !!this.pushInline,
            floor: this.floorColor || '', nav: JJMobile.navPlaces(), ui: this.uiZoom || 1,
            tab: +JJMobile.store(JJMobile.TAB_SIZE_KEY) || JJMobile.TAB_SIZE };
@@ -393,6 +396,7 @@ JJMobile.prototype.applyLook = function(l) {
   this.setFont(l.text || 17);
   this.setFontOf('push', l.push || null);
   this.setFontOf('list', l.list || null);
+  this.setFontOf('boards', l.boards || null);
   this.setLineHeight(l.lh || 1.65);
   this.setListGap(typeof l.listGap === 'number' ? l.listGap : 12);
   this.setPushStyle(typeof l.pushGap === 'number' ? l.pushGap : 10, !!l.inline);
@@ -571,6 +575,7 @@ JJMobile.prototype.layoutPane = function(pane, screen) {
       box.appendChild(fl);
     }, JJMobile.demoPushes],
     ['boards', '看板列表', function(box) {
+      box.appendChild(self.fontChips('boards'));
       var perRow = el('div', 'jjm-set jjm-set-col');
       perRow.appendChild(el('div', 'jjm-set-title', '我的最愛每一頁幾個看板'));
       perRow.appendChild(el('div', 'jjm-set-sub', '超過就分成 我的最愛1、我的最愛2…'));
@@ -841,10 +846,86 @@ JJMobile.prototype.tempListRow = function(screen) {
   return row;
 };
 
+// 自動黑名單紀錄: everyone the rules caught (not only who is on the list
+// now), to check whether a rule got it wrong. Folded; 30 at a time.
+JJMobile.prototype.autoLogRow = function(screen) {
+  var self = this;
+  var el = JJMobile.el;
+  var pref = this.app.pref;
+  var log = pref.autoBlackLog();
+  var row = el('div', 'jjm-set jjm-set-col');
+  var head = el('div', 'jjm-set-head');
+  head.appendChild(el('div', 'jjm-set-title', '自動黑名單紀錄（' + log.length + '）'));
+  row.appendChild(head);
+  row.appendChild(el('div', 'jjm-set-sub', log.length ?
+    '每次自動加入的人、原因和文章；移除或到期後也留著，可以回頭看有沒有抓錯（最近 200 筆，只存在這支手機）。' :
+    '還沒有。規則自動加入黑名單時會記在這裡，不再跳通知。'));
+  if (!log.length) return row;
+  var list = el('div', 'jjm-auto-log');
+  list.style.display = screen.autoLogOpen ? '' : 'none';
+  var toggle = JJMobile.button('jjm-mini', screen.autoLogOpen ? '收起' : '打開', function() {
+    screen.autoLogOpen = !screen.autoLogOpen;
+    list.style.display = screen.autoLogOpen ? '' : 'none';
+    toggle.textContent = screen.autoLogOpen ? '收起' : '打開';
+  });
+  head.appendChild(toggle);
+  var shown = 0;
+  var more = JJMobile.button('jjm-link-btn', '', function() { add(30); });
+  var when = function(ms) {
+    var d = new Date(ms);
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  };
+  var add = function(k) {
+    log.slice(shown, shown + k).forEach(function(e) {
+      var item = el('div', 'jjm-temp');
+      var active = !e.removed && (pref.tempBlacklist[e.id] || 0) > Date.now();
+      item.appendChild(el('div', 'jjm-temp-id', e.id));
+      item.appendChild(el('div', 'jjm-temp-why', e.kind === 'flood' ? '在一篇文章裡連推 ' + (e.n || '?') + ' 則' :
+                                                   '同一個網址貼在 ' + (e.n || '?') + ' 篇文章'));
+      if (e.kind === 'spam' && e.link) item.appendChild(el('div', 'jjm-set-sub jjm-temp-link', '網址：' + e.link));
+      if (e.title || e.url) {
+        var where = (e.board ? '[' + e.board + '] ' : '') + (e.title || e.url);
+        if (/^https:\/\/(www\.)?ptt\.cc\/bbs\//.test(e.url || '')) {
+          item.appendChild(JJMobile.button('jjm-temp-art', '文章：' + where + ' ›', function() {
+            self.open({ type: 'article', url: e.url, title: e.board || '' });
+          }));
+        } else {
+          item.appendChild(el('div', 'jjm-set-sub', '文章：' + where));
+        }
+      }
+      item.appendChild(el('div', 'jjm-set-sub', when(e.at) + ' 加入・' +
+        (active ? '還在名單上' : e.removed ? '已手動移除' : '已到期')));
+      var acts = el('div', 'jjm-chips');
+      if (active) acts.appendChild(JJMobile.button('jjm-chip', '誤判，移除', function() { pref.removeTempBlacklist(e.id); self.reload(screen); }));
+      if (e.kind === 'flood' && e.board && !FactCheck.boardInList(e.board, pref.values.factFloodRunBoards)) {
+        acts.appendChild(JJMobile.button('jjm-chip', e.board + ' 板不算連推', function() {
+          pref.addFloodRunBoard(e.board);
+          if (self.app.showToast) self.app.showToast('之後 ' + e.board + ' 板的連推不會加入黑名單', 2000);
+          self.reload(screen);
+        }));
+      }
+      if (acts.children.length) item.appendChild(acts);
+      list.insertBefore(item, more);
+    });
+    shown = Math.min(log.length, shown + k);
+    more.textContent = '再顯示 ' + Math.min(30, log.length - shown) + ' 筆';
+    more.style.display = shown < log.length ? '' : 'none';
+  };
+  list.appendChild(more);
+  add(30);
+  list.appendChild(JJMobile.button('jjm-btn-quiet', '清除紀錄', function() {
+    if (!window.confirm('清除全部 ' + log.length + ' 筆自動黑名單紀錄？（名單本身不變）')) return;
+    pref.clearAutoBlackLog();
+    self.reload(screen);
+  }));
+  row.appendChild(list);
+  return row;
+};
+
 // The rules that add people to 自動黑名單 (the extension has them under
 // 事實查核 and 黑名單; here together, above the list).
 JJMobile.AUTO_BLACK_KEYS = ['factFloodRun', 'factFloodRunMin', 'factFloodRunChain', 'factFloodRunSkipAuthor',
-                            'factFloodRunKeepRemoved', 'autoBlacklistSameUrl'];
+                            'factFloodRunBoards', 'factFloodRunKeepRemoved', 'autoBlacklistSameUrl'];
 JJMobile.prototype.autoBlackRules = function(box) {
   var self = this;
   var vals = this.app.pref.values;
@@ -864,6 +945,8 @@ JJMobile.prototype.autoBlackRules = function(box) {
       params.appendChild(self.toggleRow(key, '被別人插話打斷也算', '3 樓內、2 分鐘內接著推的；關掉 = 中間完全沒有別人才算'));
     } else if (key === 'factFloodRunSkipAuthor') {
       params.appendChild(self.toggleRow(key, '原 PO 不算', '原 PO 在自己文章裡連續回覆不會被加入'));
+    } else if (key === 'factFloodRunBoards') {
+      params.appendChild(self.textRow(key, '這些看板不算連推', '看板英文名，用逗號隔開，例如 Baseball, C_Chat（直播、球賽閒聊常連推）'));
     } else if (key === 'factFloodRunKeepRemoved') {
       box.appendChild(self.toggleRow(key, '移除過的不再加回', '你手動移除的人，24 小時內不會被連推或同網址洗版再加進來'));
     } else {

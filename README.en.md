@@ -61,7 +61,8 @@ These are hard to spot by eye. JJptt marks them right next to the pushes.
 | | |
 |---|---|
 | 🔍 **[Catch steering](docs/fact.en.md)** | Suspicious pushes are flagged for you: pushed too fast, a crowd arriving at once, the same words, the same place or a data centre. No counting by hand |
-| 🤖 **Ask AI in one tap** | Hand the whole article to ChatGPT, Claude or another AI. Or select a passage and ask "Is this true?" |
+| 🤖 **Don't trust us? Ask an AI** | JJptt only points out what looks suspicious; whether you believe it is up to you. Hand the whole article to ChatGPT, Claude or another AI in one tap, or select a passage and ask "Is this true?" |
+| 🖼️ **Made for pictures** | On picture-heavy boards like Beauty, images are laid out right in the article, no clicking each one. The next article is loaded ahead with its images, so flipping through doesn't wait |
 | 🔒 **Nobody in between** | Connects straight to PTT, with no one else's server in the middle. Your ID and password stay on your own computer or phone |
 | 📖 **Easy to read** | Images, videos and news show right inside the article. The next article is loaded ahead, so it opens at once |
 | 🎨 **Pushes at a glance** | Floors, flags, and how many times one person pushed are all colour-coded. People you'd rather not read can go on a blacklist, faded or hidden |
@@ -96,7 +97,8 @@ An "extension" is a small tool you add to your browser. JJptt keeps PTT's origin
 - **A tag is not proof of a paid shill.** It only means "this behaviour matches a rule"; the call is yours.
 - **One ruler**: the same standard whatever someone's politics, identity or group.
 - **Open evidence**: every tag can say why; open the report to see it.
-- **Can be corrected**: a mistake is removed in one tap, and every rule can be switched or tuned.
+- **Can be corrected**: a mistake is removed in one tap, and every rule can be switched or tuned. Everyone put on the blacklist automatically is logged, so you can check later whether a rule got it wrong.
+- **Don't trust our checks? Ask an AI.** Any article or passage goes to an AI in one tap, for a second opinion.
 
 ![FACT: Evidence over opinion — transparent, consistent, impartial, evidence first, willing to correct](docs/images/fact.png)
 

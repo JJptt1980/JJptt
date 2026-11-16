@@ -598,7 +598,7 @@ locale.zh_TW = {
     "message": "按 Z 搜尋推文數時自動填入（0 = 不填）"
   },
   "options_readerPrefetchCount": {
-    "message": "閱讀模式預先讀取上下幾篇（0 = 不預先讀取，最多 5）"
+    "message": "閱讀模式預先讀取上下幾篇（0 = 不預先讀取，最多 20）"
   },
   "options_colorRepeatPushers": {
     "message": "同一篇文章推文多次的人，ID 和推文內容變色（每個人不同顏色，方便看出是同一人）"
@@ -765,8 +765,35 @@ locale.zh_TW = {
   "options_factFloodRunSkipAuthor": {
     "message": "原 PO 在自己文章裡連續回覆不算"
   },
+  "options_factFloodRunBoards": {
+    "message": "這些看板不算連推（看板英文名，用逗號隔開，例如 Baseball, C_Chat；直播、球賽閒聊常連推）"
+  },
   "options_factFloodRunKeepRemoved": {
     "message": "手動移出黑名單的人，24 小時內不再被自動規則加回去（連推、同網址洗版都算）"
+  },
+  "autoLog_title": {
+    "message": "自動黑名單紀錄（%n 筆）：每次規則自動加入誰、為什麼、在哪一篇；離開名單後還留著，可以回頭檢查有沒有誤判（最近 200 筆，只存在這台電腦）"
+  },
+  "autoLog_none": {
+    "message": "自動黑名單紀錄：還沒有"
+  },
+  "autoLog_active": {
+    "message": "還在名單上"
+  },
+  "autoLog_removed": {
+    "message": "已手動移除"
+  },
+  "autoLog_expired": {
+    "message": "已到期"
+  },
+  "autoLog_misjudge": {
+    "message": "誤判，移除"
+  },
+  "autoLog_boardExempt": {
+    "message": "%b 板不算連推"
+  },
+  "autoLog_clear": {
+    "message": "清除紀錄"
   },
   "tempBlack_unknown": {
     "message": "舊版加入的，沒有記錄原因"

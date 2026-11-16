@@ -305,7 +305,7 @@ PttReader.prototype.prefetchCount = function() {
   var pref = this.app.pref;
   var n = parseInt(pref && pref.values ? pref.values.readerPrefetchCount : 1, 10);
   if (isNaN(n)) n = 1;
-  return Math.max(0, Math.min(5, n));
+  return Math.max(0, Math.min(20, n));
 };
 
 // In the list: fetch the article under the cursor once it rests there.
@@ -609,6 +609,10 @@ PttReader.prototype.onContextMenu = function(e) {
   if (selText) {
     add(i18n('cmenu_copy'), function() { self.copyText(selText.replace(/\u00a0/g, ' ')); });
     add(i18n('cmenu_askAi'), function() { app.askAi(selText); });
+    var q = selText.replace(/\s+/g, ' ').trim();
+    add(i18n('cmenu_searchGoogle') + '「' + (q.length > 12 ? q.slice(0, 12) + '…' : q) + '」', function() {
+      window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noreferrer');
+    });
     menu.appendChild(PttReader.el('li', 'divider'));
   } else if (this.article) {
     var art = this.article;
@@ -812,9 +816,8 @@ PttReader.prototype.openFor = function(h, key, manual) {
       self.setLoading(false);
     }
     self.dismissedKey = key;  // stay in the terminal for this one
-    var msg = (e && e.message) || String(e);
-    if (/Failed to fetch/i.test(msg)) msg = i18n('reader_err_network');
-    self.app.showToast(i18n('reader_failed').replace('%s', msg), 5000);
+    // no toast: the terminal shows the article anyway (the reason is in the
+    // console line above)
   });
 };
 
@@ -1647,7 +1650,7 @@ PttReader.prototype.renderPushes = function(article) {
     var id = p.id.toLowerCase();
     nth[id] = (nth[id] || 0) + 1;
     var blackListed = isBlack(id);
-    if (blackListed && hide) return;
+    if (blackListed && hide && pref.hidesBlacklisted(id)) return;
     var wrap = document.createDocumentFragment();
 
     var hints = [];

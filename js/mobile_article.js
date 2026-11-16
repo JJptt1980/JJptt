@@ -603,7 +603,7 @@ JJMobile.prototype.pushInfo = function(article, fact) {
   article.pushes.forEach(function(p, i) {
     var id = p.id.toLowerCase();
     var black = isBlack(id);
-    if (black && hide) return;
+    if (black && hide && pref.hidesBlacklisted(id)) return;
     var chips = [];   // [text, level]
     var level = '';
     var flag = '';
@@ -718,7 +718,9 @@ JJMobile.prototype.userSheet = function(id, screen) {
     box.appendChild(JJMobile.button('jjm-sheet-item', text, function() {
       self.closeSheet();
       fn();
-      self.refreshArticle();
+      var top = self.stack[self.stack.length - 1];
+      if (top && top.type === 'board') self.restyleList(top);
+      else self.refreshArticle();
     }));
   };
   if (pref.isBlacklisted(lid)) item('移出黑名單', function() { app.doRemoveBlacklistUserId(lid); });

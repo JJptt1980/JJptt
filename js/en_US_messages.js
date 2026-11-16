@@ -601,7 +601,7 @@ locale.en_US = {
     "message": "Push count filled in for Z search (0 = off)"
   },
   "options_readerPrefetchCount": {
-    "message": "Articles above / below to load ahead in the reader (0 = off, up to 5)"
+    "message": "Articles above / below to load ahead in the reader (0 = off, up to 20)"
   },
   "options_colorRepeatPushers": {
     "message": "Colour users who push several times in one article (a different colour per user)"
@@ -768,8 +768,35 @@ locale.en_US = {
   "options_factFloodRunSkipAuthor": {
     "message": "Don't count the author replying in their own article"
   },
+  "options_factFloodRunBoards": {
+    "message": "Boards where push runs don't count (board names, comma separated, e.g. Baseball, C_Chat; live threads are full of runs)"
+  },
   "options_factFloodRunKeepRemoved": {
     "message": "Don't let automatic rules (push runs, same-URL spam) re-add anyone you took off the blacklist by hand for 24 hours"
+  },
+  "autoLog_title": {
+    "message": "Automatic blacklist log (%n): who the rules added, why and in which article; kept after they leave the list, to check for mistakes (last 200, this computer only)"
+  },
+  "autoLog_none": {
+    "message": "Automatic blacklist log: empty"
+  },
+  "autoLog_active": {
+    "message": "still on the list"
+  },
+  "autoLog_removed": {
+    "message": "removed by hand"
+  },
+  "autoLog_expired": {
+    "message": "expired"
+  },
+  "autoLog_misjudge": {
+    "message": "mistake, remove"
+  },
+  "autoLog_boardExempt": {
+    "message": "runs don't count on %b"
+  },
+  "autoLog_clear": {
+    "message": "clear log"
   },
   "tempBlack_unknown": {
     "message": "added by an older version, reason not recorded"

@@ -31,6 +31,7 @@ FactCheck.DEFAULTS = {
   factHosting: true,
   factFloodRun: true, factFloodRunMin: 10,
   factFloodRunChain: true, factFloodRunSkipAuthor: true, factFloodRunKeepRemoved: true,
+  factFloodRunBoards: '',
   factTask: true, factTaskMin: 10, factTaskMax: 12, factTaskWindow: 5, factTaskQuietHours: 2, factTaskShort: 5,
   factTaskSquad: true, factTaskSquadMin: 2
 };
@@ -102,6 +103,22 @@ FactCheck.chains = function(indices, pushes) {
 // announcements and test posts are where people chat or try things out.
 FactCheck.floodRunExempt = function(title) {
   return /^\s*(?:(?:Re|Fw):\s*)?\[\s*(?:公告|測試)\s*\]/i.test(String(title || ''));
+};
+
+// 連推 doesn't count on the boards in 設定 →「這些看板不算連推」(names
+// split by commas or spaces, any case), e.g. live-chat boards.
+FactCheck.boardOf = function(article) {
+  var b = String((article && article.meta && article.meta['看板']) || '').trim();
+  if (!b) {
+    var m = /\/bbs\/([^\/]+)\//.exec((article && article.url) || '');
+    b = m ? m[1] : '';
+  }
+  return b;
+};
+FactCheck.boardInList = function(board, list) {
+  board = String(board || '').toLowerCase();
+  if (!board) return false;
+  return String(list || '').split(/[\s,，、]+/).some(function(x) { return x && x.toLowerCase() === board; });
 };
 
 FactCheck.blocks = function(pushes) {
@@ -410,7 +427,9 @@ FactCheck.prototype.analyze = function(article) {
   //    strictly unbroken; the author replying in their own article doesn't
   //    count; nobody the user took off the blacklist is put back within 24 h.
   //    Not in [公告] / [測試] articles: people chat or try things out there.
-  if (this.opt('factFloodRun') && !FactCheck.floodRunExempt(article.meta && article.meta['標題'])) {
+  var floodBoards = (this.app.pref && this.app.pref.values && this.app.pref.values.factFloodRunBoards) || '';
+  if (this.opt('factFloodRun') && !FactCheck.floodRunExempt(article.meta && article.meta['標題']) &&
+      !FactCheck.boardInList(FactCheck.boardOf(article), floodBoards)) {
     var floodMin = this.opt('factFloodRunMin');
     var self7 = this, flooders = {};
     var useChain7 = this.opt('factFloodRunChain'), keep7 = this.opt('factFloodRunKeepRemoved');
@@ -449,11 +468,7 @@ FactCheck.prototype.analyze = function(article) {
             title: (article.meta && article.meta['標題']) || '', board: (article.meta && article.meta['看板']) || ''
           } };
         });
-        pref.addTempBlacklistMany(batch);
-        batch.forEach(function(b) {
-          if (self7.app.showToast) self7.app.showToast(i18n('flood_autoBlacklisted').replace('%s', b.id).replace('%n', b.info.n) +
-                                                       pref.autoBlacklistWhere(b.info), 5000);
-        });
+        pref.addTempBlacklistMany(batch);  // no pop-up: see 自動黑名單紀錄
       }, 0);
     }
   }

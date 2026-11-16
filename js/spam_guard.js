@@ -114,12 +114,7 @@ SpamGuard.prototype.record = function(article) {
       } });
     }
   }
-  if (batch.length) {
-    pref.addTempBlacklistMany(batch);
-    var app = this.app;
-    batch.forEach(function(b) {
-      app.showToast(i18n('spam_autoBlacklisted').replace('%s', b.id).replace('%n', b.info.n) + pref.autoBlacklistWhere(b.info), 5000);
-    });
-  }
+  // no pop-up: 設定 → 自動黑名單紀錄 lists who was caught and why
+  if (batch.length) pref.addTempBlacklistMany(batch);
   this.save(seen);
 };

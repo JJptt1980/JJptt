@@ -107,9 +107,9 @@ The tags above only point things out. Two behaviours get in the way of everyone'
 | **連推** (flooding) | One account pushes too many times in a row in one article (10 or more by default), tagged 連推N. A run interrupted by others still counts if the next push is within 3 floors and 2 minutes. The author replying in their own article doesn't count | 24 hours |
 | **Same-URL spam** | One account posts the same URL in more than 3 articles within 24 hours | 24 hours |
 
-Articles titled [公告] (announcement) or [測試] (test), and replies to them, don't count for flooding.
+Articles titled [公告] (announcement) or [測試] (test), and replies to them, don't count for flooding. On boards where everyone pushes in runs anyway (live games, live streams), put the board names in the setting 「這些看板不算連推」 (boards where runs don't count), e.g. `Baseball, C_Chat`: nobody is blacklisted for runs there.
 
-You choose how blacklisted accounts look: **faded** (still visible, default), **hidden**, or **shown as usual** (the blacklist paused, the list kept).
+You choose how blacklisted accounts look: **faded** (still visible, default), **hidden**, or **shown as usual** (the blacklist paused, the list kept). Accounts added automatically are only **faded**, even with "hidden": a rule can be wrong, so you can still see them and check.
 
 Besides the automatic rules you keep three lists yourself:
 
@@ -121,7 +121,8 @@ Besides the automatic rules you keep three lists yourself:
 
 ![FACT in the settings: every rule has its own switch and threshold](images/settings-factcheck.png)
 
-- **Every entry is recorded**: the automatic blacklist shows why, the URL, which article, when it was added and how long is left.
+- **Every entry is recorded**: the automatic blacklist shows why, the URL, which article, when it was added and how long is left. There is no pop-up when someone is added; it goes into 「自動黑名單紀錄」 (the automatic blacklist log) instead, which keeps the last 200 even after they leave the list. Open the article from there and judge the pushes yourself.
+- **A mistake?** Press 「誤判，移除」 (mistake, remove) in the log. If a board is simply full of runs (say, live games), press the button for that board and runs there stop counting.
 - **It ends by itself**: after 24 hours the entry is gone.
 - **Remove in one tap**: think it's wrong? Press 「移除」 (remove). Anyone you remove by hand isn't added back by the rules for 24 hours.
 - **Make it permanent**: press 「改成永久」 to move the account to your own blacklist.

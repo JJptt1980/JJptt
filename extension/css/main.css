@@ -1290,6 +1290,8 @@ input.jj-color { width: 80px !important; height: 34px; padding: 2px; }
 #tabContentBlacklist .jj-listblock .checkbox { margin-top: 0; }
 #tabContentBlacklist .jj-listlabel { margin: 0 0 4px; }
 #tabContentBlacklist .jj-temp-list { margin: 8px 0 12px; }
+#tabContentBlacklist .jj-auto-log summary { cursor: pointer; }
+#tabContentBlacklist .jj-auto-log[open] { max-height: 320px; overflow-y: auto; }
 
 /* ===== Settings window: one look for every tab =====
    大 = tab title, 中 = section heading (band + bar), 小 = group heading */
@@ -1465,7 +1467,12 @@ body.jj-mobile .jjm {
 .jjm .jjm-article { flex-direction: column; align-items: stretch; gap: calc(2px + var(--jjm-lgap, 12px) * .35); }
 .jjm-article-title { font-size: var(--jjm-lfs, var(--jjm-fs)); line-height: 1.4; font-weight: 500; }
 .jjm-article-meta { display: flex; align-items: center; gap: 10px; font-size: var(--f-sm); color: var(--sub); }
-.jjm-author { color: var(--sub); }
+.jjm-author { color: var(--sub); padding: 6px 8px; margin: -6px -8px; }
+.jjm .jjm-article { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* 版面 → 看板列表 → 字的大小 (--jjm-bfs, default 17px); the board's
+   description one step smaller, not the tiny caption size */
+.jjm-board .jjm-row-title { font-size: var(--jjm-bfs, 17px); }
+.jjm-board .jjm-row-sub { font-size: calc(var(--jjm-bfs, 17px) - 1px); margin-top: 3px; }
 .jjm-author.jjm-watch { color: var(--watch); }
 .jjm-author.jjm-noted { color: var(--note); }
 .jjm-date { margin-left: auto; }
@@ -1754,7 +1761,6 @@ body.jj-mobile { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   font-size: var(--f-md); font-weight: 600; color: var(--sub); white-space: nowrap; background: none;
 }
 .jjm .jjm-tab.jjm-on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
-.jjm .jjm-tab-sync { color: var(--accent); }
 /* the version / 檢查更新 in the home top bar */
 .jjm .jjm-verbtn {
   font-size: var(--f-sm); font-weight: 600; color: var(--sub); padding: 9px 14px; border-radius: var(--r-pill);

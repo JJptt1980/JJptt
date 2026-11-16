@@ -31,7 +31,7 @@ So you don't miss what's already there:
 | **Read a board's archive** (精華區) | No | In the extension: press `z` in the board. To just read it, most boards' archives are also on PTT's web site (www.ptt.cc) |
 | **Browse boards by category** | Favourites, popular boards, or typing a board's name | If you know the name, type it on the app's home screen. To browse, use 分類看板 on the extension's main menu |
 | **Read hidden or private boards** | Not possible. The app reads articles from PTT's web site, which only has public boards | Use the extension |
-| **Add to or change your favourites** | View only: no adding, removing or reordering | In the extension's board list, press `a` to add and `d` to remove. Refresh the app afterwards to see the change |
+| **Change your PTT favourites** | The ☆ at the top right of a board adds it to the app's favourites and removes it again. That stays on the phone: it doesn't change the favourites in your PTT account, and there's no reordering | In the extension's board list, press `a` to add and `d` to remove. The next time the app opens and logs in, it brings in the boards you added (ones you removed in the extension, remove in the app with ☆) |
 | **Chat, send 水球 (instant messages), see your friends list** | No | Use the extension |
 | **Look up someone's profile** (名片, logins) | No | In the extension: main menu → Talk → Query, then type the account |
 | **Change your profile**: nickname, signature, password | No. The app posts and replies without a signature | In the extension: main menu → User |

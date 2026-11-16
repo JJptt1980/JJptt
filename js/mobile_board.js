@@ -96,6 +96,8 @@ JJMobile.prototype.hiddenEntry = function(e) {
   var black = pref.enableBlacklist && e.author && pref.isBlacklisted(e.author);
   var kw = (pref.titleKeywords || []).some(function(k) { return k && e.title.indexOf(k) >= 0; });
   if (!black && !kw) return '';
+  // only the automatic blacklist: faded, never hidden
+  if (!kw && !pref.hidesBlacklisted(e.author)) return 'fade';
   return pref.hideBlacklisted ? 'hide' : 'fade';
 };
 
@@ -118,9 +120,17 @@ JJMobile.prototype.appendEntry = function(screen, e) {
   if (nrec) meta.appendChild(nrec);
   if (e.pinned) meta.appendChild(el('span', 'jjm-tag', '置底'));
   var who = el('span', 'jjm-author', e.author);
-  var pref = this.app.pref;
-  if (pref && e.author && pref.watchlistedUserIds && e.author.toLowerCase() in pref.watchlistedUserIds) who.classList.add('jjm-watch');
-  if (pref && e.author && pref.notedUserIds && e.author.toLowerCase() in pref.notedUserIds) who.classList.add('jjm-noted');
+  e.who = who;
+  this.styleAuthor(e);
+  // the author's lists (黑名單, 觀察名單, 自訂名單) without copying the ID:
+  // tap the ID, or hold anywhere on the row
+  if (e.author) {
+    JJMobile.tap(who, function() { self.userSheet(e.author, screen); });
+    row.addEventListener('contextmenu', function(ev) {
+      ev.preventDefault();
+      self.userSheet(e.author, screen);
+    });
+  }
   meta.appendChild(who);
   meta.appendChild(el('span', 'jjm-date', e.date));
   row.appendChild(meta);
@@ -131,6 +141,26 @@ JJMobile.prototype.appendEntry = function(screen, e) {
     self.open({ type: 'article', url: e.url, list: screen, index: index, title: screen.board });
   });
   screen.listNode.appendChild(row);
+};
+
+JJMobile.prototype.styleAuthor = function(e) {
+  var pref = this.app.pref;
+  var id = String(e.author || '').toLowerCase();
+  e.who.classList.toggle('jjm-watch', !!(pref && id && pref.watchlistedUserIds && id in pref.watchlistedUserIds));
+  e.who.classList.toggle('jjm-noted', !!(pref && id && pref.notedUserIds && id in pref.notedUserIds));
+};
+
+// After a list change from the article list: fade / hide / colour the rows
+// again without reloading.
+JJMobile.prototype.restyleList = function(screen) {
+  var self = this;
+  (screen.entries || []).forEach(function(e) {
+    if (!e.row) return;
+    var hidden = self.hiddenEntry(e);
+    e.row.classList.toggle('jjm-faded', hidden === 'fade');
+    e.row.style.display = hidden === 'hide' ? 'none' : '';
+    if (e.who) self.styleAuthor(e);
+  });
 };
 
 // 推文數 the way PTT colours it: 爆 red, 10+ yellow, 1-9 green, X (噓) grey
@@ -214,7 +244,7 @@ JJMobile.prototype.getArticle = function(url) {
 JJMobile.prototype.aheadCount = function() {
   var pref = this.app.pref;
   var n = parseInt(pref && pref.values ? pref.values.readerPrefetchCount : 3, 10);
-  return isNaN(n) ? 3 : Math.max(0, Math.min(10, n));
+  return isNaN(n) ? 3 : Math.max(0, Math.min(20, n));
 };
 
 // Loads the next few articles of a list, two at a time; their pictures too

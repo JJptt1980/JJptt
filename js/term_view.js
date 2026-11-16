@@ -507,7 +507,7 @@ TermView.prototype = {
       if (lineUpdated) {
         lineUpdated = false;
         var tmp = [];
-        var shouldFade = false;
+        var shouldFade = false, kwFade = false;
         var userid = '';
 
         // check blacklist for user (and title keywords in lists) and fade row
@@ -520,7 +520,7 @@ TermView.prototype = {
             userid = rowText.parseThreadForUserId();
             if (userid && pref.titleKeywords.length &&
                 rowText.parseThreadTitle().matchesAnyKeyword(pref.titleKeywords)) {
-              shouldFade = true;
+              shouldFade = kwFade = true;
             }
           }
           if (userid && pref.isBlacklisted(userid)) {
@@ -529,7 +529,9 @@ TermView.prototype = {
         }
         var blacklistStyle = '';
         if (shouldFade) {
-          blacklistStyle = ' style="' + this.blacklistedRowStyle() + '"';
+          // the automatic blacklist alone: faded even when 不顯示 is on
+          var autoOnly = !kwFade && userid && !pref.hidesBlacklisted(userid);
+          blacklistStyle = ' style="' + (autoOnly ? 'opacity:0.2' : this.blacklistedRowStyle()) + '"';
         }
 
         if (this.doHighlightOnCurRow) 

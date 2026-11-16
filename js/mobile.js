@@ -25,7 +25,8 @@ JJMobile.FONT_KEY = 'jjptt.m.font';
 JJMobile.FONT_PARTS = {
   text: { key: JJMobile.FONT_KEY, css: '--jjm-fs', title: '文章內文' },
   push: { key: 'jjptt.m.fontPush', css: '--jjm-pfs', title: '推文' },
-  list: { key: 'jjptt.m.fontList', css: '--jjm-lfs', title: '文章列表' }
+  list: { key: 'jjptt.m.fontList', css: '--jjm-lfs', title: '文章列表' },
+  boards: { key: 'jjptt.m.fontBoards', css: '--jjm-bfs', title: '看板列表' }  // unset: 17px
 };
 JJMobile.FONTS = [15, 17, 19, 22];
 
@@ -145,11 +146,6 @@ JJMobile.prototype.setup = function() {
   this.ptt.onChange(function(state) {
     var top = self.stack[self.stack.length - 1];
     if (top) self.setBar(top);
-    var home = self.stack[0];
-    if (home && home.type === 'home' && home.view) {  // the sync button's text
-      var btn = home.view.querySelector('.jjm-tab-sync');
-      if (btn) JJMobile.setLabel(btn, 'reload', state === 'in' ? '同步' : '同步 PTT');
-    }
     // logged in: bring PTT's 我的最愛 in once per app start
     if (state === 'in' && !self.favsSyncedNow) {
       self.favsSyncedNow = true;
@@ -162,6 +158,7 @@ JJMobile.prototype.setup = function() {
   this.setFloorColor(JJMobile.store(JJMobile.FLOOR_KEY));
   this.setFontOf('push', JJMobile.store(JJMobile.FONT_PARTS.push.key));
   this.setFontOf('list', JJMobile.store(JJMobile.FONT_PARTS.list.key));
+  this.setFontOf('boards', JJMobile.store(JJMobile.FONT_PARTS.boards.key));
   this.setPushStyle();
   this.setListGap();
 

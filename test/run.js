@@ -349,13 +349,18 @@ test('spam: keep-removed rule off: put back', function() {
   guard.record(spamArticle(4));
   assert.ok(pref.isBlacklisted('spammer'));
 });
-test('spam: the toast names the article', function() {
+test('spam: no pop-up; the log names the article', function() {
   lib.store = {};
   var pref = makePref();
   var guard = new SpamGuard(pref.app);
   for (var i = 1; i <= 4; ++i) guard.record(spamArticle(i));
-  assert.strictEqual(pref.app.toasts.length, 1);
-  assert.ok(pref.app.toasts[0].indexOf('[Test] 文4') >= 0, pref.app.toasts[0]);
+  assert.strictEqual(pref.app.toasts.length, 0);
+  var log = pref.autoBlackLog();
+  assert.strictEqual(log.length, 1);
+  assert.strictEqual(log[0].id, 'spammer');
+  assert.strictEqual(log[0].kind, 'spam');
+  assert.strictEqual(log[0].title, '文4');
+  assert.strictEqual(log[0].board, 'Test');
 });
 
 test('spam: one article reloaded with ?_=… (after a push) is still one article', function() {
@@ -406,13 +411,64 @@ test('fetchArticle keeps the article\'s own address (no ?_= cache query)', funct
 
 console.log('自動黑名單');
 
-test('3 flooders in one article: one redraw, 3 toasts naming the article', function() {
+test('3 flooders in one article: one redraw, no pop-ups, 3 log entries naming the article', function() {
+  lib.store = {};
   var ps = many('a1', 10, 1).concat(many('a2', 10, 1), many('a3', 10, 1));
   var r = analyze(article(ps));
   ['a1', 'a2', 'a3'].forEach(function(id) { assert.ok(r.pref.isBlacklisted(id), id); });
   assert.strictEqual(r.pref.app.redraws, 1);
-  assert.strictEqual(r.pref.app.toasts.length, 3);
-  r.pref.app.toasts.forEach(function(t) { assert.ok(t.indexOf('[Test] [問卦] 測試') >= 0, t); });
+  assert.strictEqual(r.pref.app.toasts.length, 0);
+  var log = r.pref.autoBlackLog();
+  assert.deepStrictEqual(log.map(function(e) { return e.id; }).sort(), ['a1', 'a2', 'a3']);
+  log.forEach(function(e) { assert.strictEqual(e.title, '[問卦] 測試'); assert.strictEqual(e.board, 'Test'); assert.strictEqual(e.n, 10); });
+});
+test('log: taken off by hand is marked on the newest entry; kept after leaving the list', function() {
+  lib.store = {};
+  var r = analyze(article(many('aaa', 10, 1)));
+  r.pref.removeTempBlacklist('aaa');
+  var log = r.pref.autoBlackLog();
+  assert.strictEqual(log.length, 1);
+  assert.ok(log[0].removed > 0);
+  assert.ok(!r.pref.isBlacklisted('aaa'));
+});
+test('log: keeps the last 200', function() {
+  lib.store = {};
+  var pref = makePref();
+  for (var i = 0; i < 205; ++i) pref.logAutoBlack([{ id: 'u' + i, info: { kind: 'flood', n: 10 } }]);
+  var log = pref.autoBlackLog();
+  assert.strictEqual(log.length, 200);
+  assert.strictEqual(log[0].id, 'u204');
+});
+test('連推 boards: no 連推 tag or blacklist on a listed board (any case, commas or spaces)', function() {
+  var r = analyze(article(many('aaa', 12, 1)), { factFloodRunBoards: 'Baseball, test' });
+  assert.ok(!r.pref.isBlacklisted('aaa'));
+  r = analyze(article(many('aaa', 12, 1)), { factFloodRunBoards: 'Baseball C_Chat' });
+  assert.ok(r.pref.isBlacklisted('aaa'));
+});
+test('連推 boards: board from the URL when the header has none', function() {
+  var art = article(many('aaa', 12, 1));
+  delete art.meta['看板'];
+  assert.ok(!analyze(art, { factFloodRunBoards: 'Test' }).pref.isBlacklisted('aaa'));
+});
+test('連推 boards: adding a board lets out who was caught there', function() {
+  lib.store = {};
+  var r = analyze(article(many('aaa', 12, 1)));
+  assert.ok(r.pref.isBlacklisted('aaa'));
+  r.pref.addFloodRunBoard('Test');
+  assert.strictEqual(r.pref.values.factFloodRunBoards, 'Test');
+  assert.ok(!r.pref.isBlacklisted('aaa'));
+  r.pref.values.factFloodRunBoards = 'Baseball,';
+  r.pref.addFloodRunBoard('C_Chat');
+  assert.strictEqual(r.pref.values.factFloodRunBoards, 'Baseball, C_Chat');
+});
+test('不顯示 hides the hand-made blacklist only; the automatic one is faded', function() {
+  var r = analyze(article(many('aaa', 10, 1)));
+  r.pref.hideBlacklisted = true;
+  r.pref.blacklistedUserIds.bbb = true;
+  assert.ok(r.pref.isBlacklisted('aaa') && !r.pref.hidesBlacklisted('aaa'));
+  assert.ok(r.pref.hidesBlacklisted('BBB'));
+  r.pref.hideBlacklisted = false;
+  assert.ok(!r.pref.hidesBlacklisted('bbb'));
 });
 test('make permanent: moves from the temporary list to the blacklist', function() {
   var r = analyze(article(many('aaa', 10, 1)));

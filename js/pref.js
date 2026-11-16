@@ -21,6 +21,9 @@ function PttChromePref(app, onInitializedCallback) {
   this.initCallbackCalled = false;
 }
 
+PttChromePref.AUTO_LOG_KEY = 'jjptt.autoBlackLog';
+PttChromePref.AUTO_LOG_MAX = 200;
+
 PttChromePref.prototype = {
 
   // Blacklisted permanently, or temporarily (not expired yet).
@@ -30,6 +33,13 @@ PttChromePref.prototype = {
     if (id in this.blacklistedUserIds) return true;
     var until = this.tempBlacklist[id];
     return !!(until && until > Date.now());
+  },
+
+  // 不顯示 (hideBlacklisted) is for the people the user blacklisted by hand.
+  // The automatic rules (連推, 同網址洗版) can be wrong, so who they caught
+  // is only faded: still there to check (長按 / 右鍵 → 移出黑名單).
+  hidesBlacklisted: function(id) {
+    return !!(this.hideBlacklisted && id && String(id).toLowerCase() in this.blacklistedUserIds);
   },
 
   // info (optional) says why, for the list in settings:
@@ -48,6 +58,7 @@ PttChromePref.prototype = {
       if (list[j].info) this.tempBlacklistInfo[id] = list[j].info;
       else delete this.tempBlacklistInfo[id];
     }
+    this.logAutoBlack(list);
     this.saveTempBlacklist();
     this.app.view.redraw(true);
     if (this.app.reader) this.app.reader.rerender();
@@ -58,6 +69,7 @@ PttChromePref.prototype = {
   // time an article is loaded.
   removeTempBlacklist: function(id) {
     id = String(id).toLowerCase();
+    this.markAutoBlackRemoved(id);
     this.pruneFloodExempt();
     this.floodExempt[id] = Date.now() + 24 * 3600 * 1000;
     this.values.floodExempt = JSON.stringify(this.floodExempt);
@@ -66,6 +78,63 @@ PttChromePref.prototype = {
     delete this.tempBlacklist[id];
     delete this.tempBlacklistInfo[id];
     this.saveTempBlacklist();
+  },
+
+  // 自動黑名單紀錄: everyone the automatic rules caught, kept after they
+  // leave the list (the last 200, this device only), to check later whether
+  // a rule was wrong. Instead of a pop-up for each one.
+  autoBlackLog: function() {
+    try {
+      var log = JSON.parse(lib.safeGetItem(PttChromePref.AUTO_LOG_KEY) || '[]');
+      return Array.isArray(log) ? log : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  saveAutoBlackLog: function(log) {
+    lib.safeSetItem(PttChromePref.AUTO_LOG_KEY, JSON.stringify(log.slice(0, PttChromePref.AUTO_LOG_MAX)));
+  },
+
+  logAutoBlack: function(list) {
+    var log = this.autoBlackLog(), now = Date.now(), added = false;
+    list.forEach(function(b) {
+      var info = b.info;
+      if (!info || (info.kind !== 'flood' && info.kind !== 'spam')) return;
+      log.unshift({ at: now, id: String(b.id).toLowerCase(), kind: info.kind, n: info.n || 0, link: info.link || '',
+                    url: info.url || '', title: info.title || '', board: info.board || '' });
+      added = true;
+    });
+    if (added) this.saveAutoBlackLog(log);
+  },
+
+  // Taken off by hand: the newest entry for them says so (誤判?).
+  markAutoBlackRemoved: function(id) {
+    var log = this.autoBlackLog();
+    for (var i = 0; i < log.length; ++i) {
+      if (log[i].id !== id) continue;
+      if (log[i].removed) return;
+      log[i].removed = Date.now();
+      this.saveAutoBlackLog(log);
+      return;
+    }
+  },
+
+  clearAutoBlackLog: function() {
+    this.saveAutoBlackLog([]);
+  },
+
+  // 「這個看板不算連推」from the log: adds the board to factFloodRunBoards
+  // and lets out everyone caught for 連推 there.
+  addFloodRunBoard: function(board) {
+    if (!board) return;
+    var cur = String(this.values.factFloodRunBoards || '');
+    if (typeof FactCheck !== 'undefined' && FactCheck.boardInList(board, cur)) return;
+    this.values.factFloodRunBoards = (cur.trim() ? cur.trim().replace(/[,，、\s]+$/, '') + ', ' : '') + board;
+    this.setStorage({ values: { factFloodRunBoards: this.values.factFloodRunBoards } });
+    var input = typeof $ === 'function' && $('#opt_factFloodRunBoards input');
+    if (input && input.val) input.val(this.values.factFloodRunBoards);
+    if (this.dropExemptFlood()) this.saveTempBlacklist();
   },
 
   isFloodExempt: function(id) {
@@ -106,7 +175,8 @@ PttChromePref.prototype = {
     var dropped = false;
     for (var id in this.tempBlacklistInfo) {
       var info = this.tempBlacklistInfo[id];
-      if (info && info.kind === 'flood' && FactCheck.floodRunExempt(info.title)) {
+      if (info && info.kind === 'flood' && (FactCheck.floodRunExempt(info.title) ||
+          FactCheck.boardInList(info.board, this.values && this.values.factFloodRunBoards))) {
         delete this.tempBlacklist[id];
         delete this.tempBlacklistInfo[id];
         dropped = true;
@@ -137,6 +207,7 @@ PttChromePref.prototype = {
     this.values.tempBlacklistInfo = JSON.stringify(this.tempBlacklistInfo);
     this.setStorage({ values: { tempBlacklist: this.values.tempBlacklist, tempBlacklistInfo: this.values.tempBlacklistInfo } });
     this.refreshTempBlacklistOnUi();
+    this.refreshAutoBlackLogOnUi();
   },
 
   refreshTempBlacklistOnUi: function() {
@@ -184,9 +255,70 @@ PttChromePref.prototype = {
     });
   },
 
+  // 設定 → 黑名單: 自動黑名單紀錄 (folded; newest first)
+  refreshAutoBlackLogOnUi: function() {
+    var box = typeof $ === 'function' && $('#opt_autoBlackLog');
+    if (!box || !box.length) return;
+    var self = this;
+    var log = this.autoBlackLog();
+    var open = box.prop('open');
+    box.empty();
+    $('<summary></summary>').text(log.length ? i18n('autoLog_title').replace('%n', log.length) : i18n('autoLog_none')).appendTo(box);
+    var redraw = function() {
+      self.refreshTempBlacklistOnUi();
+      self.app.view.redraw(true);
+      if (self.app.reader) self.app.reader.rerender();
+    };
+    log.forEach(function(e) {
+      var row = $('<div class="jj-temp-black"></div>').appendTo(box);
+      var d = new Date(e.at);
+      row.append(document.createTextNode((d.getMonth() + 1) + '/' + d.getDate() + ' ' +
+        ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ' '));
+      $('<b></b>').text(e.id).appendTo(row);
+      var why = i18n('tempBlack_' + e.kind).replace('%n', e.n || '?');
+      if (e.kind === 'spam' && e.link) why += i18n('tempBlack_spamLink').replace('%u', e.link);
+      row.append(document.createTextNode(' — ' + why));
+      if (e.title || e.url) {
+        row.append(document.createTextNode(i18n('tempBlack_in')));
+        var label = (e.board ? '[' + e.board + '] ' : '') + (e.title || e.url);
+        if (/^https:\/\/(www\.)?ptt\.cc\//.test(e.url || '')) {
+          $('<a target="_blank" rel="noreferrer"></a>').attr('href', e.url).text(label).appendTo(row);
+        } else {
+          row.append(document.createTextNode(label));
+        }
+      }
+      var active = !e.removed && (self.tempBlacklist[e.id] || 0) > Date.now();
+      row.append(document.createTextNode(' — ' + i18n(active ? 'autoLog_active' : e.removed ? 'autoLog_removed' : 'autoLog_expired') + ' '));
+      if (active) {
+        $('<a href="#"></a>').text(i18n('autoLog_misjudge')).click(function(ev) {
+          ev.preventDefault();
+          self.removeTempBlacklist(e.id);
+          redraw();
+        }).appendTo(row);
+        row.append(document.createTextNode(' '));
+      }
+      if (e.kind === 'flood' && e.board && !FactCheck.boardInList(e.board, self.values.factFloodRunBoards)) {
+        $('<a href="#"></a>').text(i18n('autoLog_boardExempt').replace('%b', e.board)).click(function(ev) {
+          ev.preventDefault();
+          self.addFloodRunBoard(e.board);
+          redraw();
+        }).appendTo(row);
+      }
+    });
+    if (log.length) {
+      $('<a href="#"></a>').text(i18n('autoLog_clear')).click(function(ev) {
+        ev.preventDefault();
+        self.clearAutoBlackLog();
+        self.refreshAutoBlackLogOnUi();
+      }).appendTo($('<div></div>').appendTo(box));
+    }
+    box.prop('open', open);
+  },
+
   updateSettingsToUi: function() {
     this.refreshBlacklistOnUi();
     this.refreshTempBlacklistOnUi();
+    this.refreshAutoBlackLogOnUi();
     this.refreshWatchlistOnUi();
     this.refreshNotesOnUi();
 
