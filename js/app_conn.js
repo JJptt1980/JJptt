@@ -13,7 +13,7 @@ var lib = {};
 
 // Set this to your deployed relay, e.g. 'wss://jjptt-relay.xxx.workers.dev'.
 // Can also be overridden with ?relay=wss://... in the page URL.
-lib.DEFAULT_RELAY_URL = '';
+lib.DEFAULT_RELAY_URL = 'wss://jjptt-relay.taiwanpapi.workers.dev';  // the owner's relay (worker/)
 lib.RELAY_STORAGE_KEY = 'jjptt.relayUrl';
 lib.PREFS_STORAGE_KEY = 'jjptt.storage';
 lib.NATIVE_HOST_NAME = 'com.jjptt.host';
