@@ -696,6 +696,15 @@ locale.zh_TW = {
   "options_factCannedWindow": {
     "message": "要在幾分鐘內集中出現（0 = 不限）"
   },
+  "options_factSimilar": {
+    "message": "相似帳號：名稱只差在最後的數字（例如 crispy01、crispy02、crispy03），而且在同一篇文章裡短時間內都來推文，標「相似帳號」；其中至少 2 個帳號還有秒推、脈衝、同網段、機房或罐頭其中一項，才標紅色並寫進報告，不然標灰色"
+  },
+  "options_factSimilarMin": {
+    "message": "至少幾個帳號才標"
+  },
+  "options_factSimilarWindow": {
+    "message": "要在幾分鐘內都來推文"
+  },
   "options_factSubnet": {
     "message": "同網段：不同帳號的 IP 前三段相同（例如 101.12.34.x），標「同網段」"
   },

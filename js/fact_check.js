@@ -10,6 +10,8 @@
 //   boost   補血: a long run of short 推 right after 噓 had the upper hand
 //   canned  罐頭: different accounts posting near-identical sentences
 //   subnet  同網段: different accounts from the same /24 IP block
+//   similar 相似帳號: look-alike names (crispy01, crispy02 ...) pushing
+//           within an hour of each other
 // Phase 2 adds what needs several articles (FactHistory below).
 function FactCheck(app) {
   this.app = app;
@@ -23,6 +25,7 @@ FactCheck.DEFAULTS = {
   factBoost: true, factBoostRun: 15,
   factCanned: true, factCannedMin: 5, factCannedSim: 60, factCannedPhrase: 6, factCannedWindow: 10,
   factSubnet: true, factSubnetMin: 3,
+  factSimilar: true, factSimilarMin: 3, factSimilarWindow: 60,
   factCooccur: true, factCooccurRate: 70, factCooccurMin: 5,
   factSquad: true, factSquadMin: 3,
   factHosting: true,
@@ -516,7 +519,81 @@ FactCheck.prototype.analyze = function(article) {
     });
   }
 
+  // 相似帳號 after 罐頭: look-alike names alone may be chance, look-alike
+  // names pushing within the hour are not. Red (in the report) when two of
+  // them also show another sign, like 罐頭; grey otherwise.
+  if (this.opt('factSimilar')) {
+    var simGroups = FactCheck.similarGroups(pushes, this.opt('factSimilarMin'), this.opt('factSimilarWindow'));
+    var simSign = /^(秒推|脈衝|同網段|機房|同機房|罐頭)/;
+    var simWin = this.opt('factSimilarWindow');
+    var simSpan = simWin % 60 === 0 ? (simWin / 60) + ' 小時' : simWin + ' 分鐘';
+    simGroups.forEach(function(g) {
+      var signed = {};
+      g.rows.forEach(function(k) {
+        if (tags[k].some(function(t) { return simSign.test(t.t); })) signed[ids[k]] = true;
+      });
+      var red = Object.keys(signed).length >= 2;
+      g.rows.forEach(function(k) { add(k, '相似帳號', red ? 'warn' : 'grey'); });
+      if (red) report.push('相似帳號：' + g.accounts.length + ' 個名稱相似的帳號在 ' + simSpan + '內推文（' + FactCheck.similarRange(g.accounts) + '）' +
+                           '，其中 ' + Object.keys(signed).length + ' 個還有秒推／脈衝／同網段／機房／罐頭等其他疑點');
+    });
+  }
+
   return { tags: tags, report: report };
+};
+
+// Look-alike names: the same start, only the digits at the end differ
+// (crispy01 … crispy05). The shared start must be at least 4 characters:
+// "abc123" / "abc124" share "abc12", but "ab1" / "ab2" share only "ab".
+// Returns [{accounts: [...ids, original case, sorted], rows: [push indices]}]
+// for each group of at least `min` accounts pushing within `minutes`.
+FactCheck.similarKey = function(id) {
+  var m = /^(.*?)(\d*)$/.exec(String(id || '').toLowerCase());
+  if (!m || !m[1]) return '';
+  if (m[1].length >= 4) return m[1];
+  // short letters: group on everything but the last digit (abc12x)
+  if (m[2].length >= 2 && (m[1] + m[2]).length - 1 >= 4) return m[1] + m[2].slice(0, -1) + '#';
+  return '';
+};
+
+FactCheck.similarGroups = function(pushes, min, minutes) {
+  var byKey = {}, out = [];
+  for (var i = 0; i < pushes.length; ++i) {
+    var key = FactCheck.similarKey(pushes[i].id);
+    if (!key) continue;
+    (byKey[key] = byKey[key] || []).push(i);
+  }
+  var lower = function(k) { return String(pushes[k].id).toLowerCase(); };
+  Object.keys(byKey).forEach(function(key) {
+    var rows = byKey[key];
+    var accs = {};
+    rows.forEach(function(k) { accs[lower(k)] = true; });
+    if (Object.keys(accs).length < min) return;
+    // the busiest `minutes` stretch, counted in accounts
+    var timed = rows.filter(function(k) { return FactCheck.pushMinute(pushes[k]) !== null; })
+                    .sort(function(x, y) { return FactCheck.pushMinute(pushes[x]) - FactCheck.pushMinute(pushes[y]); });
+    var best = {}, bestN = 0, lo = 0;
+    for (var hi = 0; hi < timed.length; ++hi) {
+      while (FactCheck.pushMinute(pushes[timed[hi]]) - FactCheck.pushMinute(pushes[timed[lo]]) > minutes) lo++;
+      var win = {};
+      for (var w = lo; w <= hi; ++w) win[lower(timed[w])] = pushes[timed[w]].id;
+      var wn = Object.keys(win).length;
+      if (wn > bestN) { best = win; bestN = wn; }
+    }
+    if (bestN < min) return;
+    var names = Object.keys(best).map(function(k) { return String(best[k]); });
+    names.sort(function(a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+    out.push({ accounts: names, rows: rows.filter(function(k) { return lower(k) in best; }) });
+  });
+  return out;
+};
+
+// "crispy01～03": the first name, then what the last one changes
+FactCheck.similarRange = function(names) {
+  if (names.length < 2) return names.join('');
+  var a = names[0], b = names[names.length - 1], p = 0;
+  while (p < a.length && p < b.length && a.charAt(p).toLowerCase() === b.charAt(p).toLowerCase() && !/\d/.test(a.charAt(p))) p++;
+  return a + '～' + b.slice(p);
 };
 
 // ---- phase 2: what needs several articles ---------------------------------

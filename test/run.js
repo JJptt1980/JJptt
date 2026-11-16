@@ -465,6 +465,46 @@ test('罐頭: two accounts with another sign make it 罐頭', function() {
   assert.ok(r.report.some(function(t) { return /^罐頭A/.test(t); }));
 });
 
+// ---- 相似帳號 ----------------------------------------------------------------
+function similarTags(r) {
+  var out = {};
+  r.tags.forEach(function(ts) { ts.forEach(function(t) { if (t.t === '相似帳號') out[t.lvl] = (out[t.lvl] || 0) + 1; }); });
+  return out;
+}
+function similarLine(r) { return r.report.filter(function(t) { return /^相似帳號/.test(t); })[0] || ''; }
+test('相似帳號: crispy01～03 pushing within the hour, two also 秒推 -> red, in the report', function() {
+  var ps = [push('crispy01', 1), push('crispy02', 1), push('a1', 20), push('crispy03', 50)];
+  var r = analyze(article(ps));
+  assert.deepStrictEqual(similarTags(r), { warn: 3 });
+  assert.strictEqual(similarLine(r).indexOf('相似帳號：3 個名稱相似的帳號在 1 小時內推文（crispy01～03）'), 0, similarLine(r));
+});
+test('相似帳號: no other sign -> grey, not in the report', function() {
+  var ps = [push('crispy01', 10), push('crispy02', 30), push('crispy03', 50)];
+  var r = analyze(article(ps));
+  assert.deepStrictEqual(similarTags(r), { grey: 3 });
+  assert.strictEqual(similarLine(r), '');
+});
+test('相似帳號: more than 60 minutes apart does not count', function() {
+  var ps = [push('crispy01', 0), push('crispy02', 10)];
+  var late = push('crispy03', 0); late.time = '11/12 11:30';
+  var r = analyze(article(ps.concat([late])));
+  assert.deepStrictEqual(similarTags(r), {});
+});
+test('相似帳號: two accounts are not enough; the count can be changed', function() {
+  var ps = [push('crispy01', 10), push('crispy02', 30)];
+  assert.deepStrictEqual(similarTags(analyze(article(ps))), {});
+  assert.deepStrictEqual(similarTags(analyze(article(ps), { factSimilarMin: 2 })), { grey: 2 });
+});
+test('相似帳號: abc123 / abc124 / abc125 count; ab1 / ab2 / ab3 (short start) do not', function() {
+  assert.deepStrictEqual(similarTags(analyze(article([push('abc123', 10), push('abc124', 20), push('abc125', 30)]))), { grey: 3 });
+  assert.deepStrictEqual(similarTags(analyze(article([push('ab1', 10), push('ab2', 20), push('ab3', 30)]))), {});
+  assert.deepStrictEqual(similarTags(analyze(article([push('abc1', 10), push('abc2', 20), push('abc3', 30)]))), {});
+});
+test('相似帳號: rule off -> nothing', function() {
+  var ps = [push('crispy01', 1), push('crispy02', 1), push('crispy03', 5)];
+  assert.deepStrictEqual(similarTags(analyze(article(ps), { factSimilar: false })), {});
+});
+
 test('秒推: the author adding a note right after posting is not 秒推', function() {
   var r = analyze(article([push('op', 0), push('x', 1)], 'op'));
   assert.deepStrictEqual(r.tags[0], []);

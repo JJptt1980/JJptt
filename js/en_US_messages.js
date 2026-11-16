@@ -699,6 +699,15 @@ locale.en_US = {
   "options_factCannedWindow": {
     "message": "Minutes they must arrive within (0 = any time)"
   },
+  "options_factSimilar": {
+    "message": "Look-alike accounts: names that differ only in the digits at the end (crispy01, crispy02, crispy03) pushing in the same article within a short time are tagged 相似帳號; red and in the report when at least two of them also show another sign (fast, burst, same network, data centre, canned), grey otherwise"
+  },
+  "options_factSimilarMin": {
+    "message": "Accounts needed"
+  },
+  "options_factSimilarWindow": {
+    "message": "Minutes they must all push within"
+  },
   "options_factSubnet": {
     "message": "Same /24 network: different accounts whose IPs share the first three parts"
   },

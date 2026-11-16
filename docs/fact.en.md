@@ -86,6 +86,7 @@ The numbers below are the defaults; you can change them in the settings.
 | Tag | What it means | Why it's suspicious |
 |---|---|---|
 | **罐頭** (canned) | Within 10 minutes, at least 5 accounts say almost the same thing: 60%+ of the words shared and at least 6 characters in a row identical. Quoting the title or the article, and relay games, don't count. It turns red as 「罐頭A」 only when at least 2 of those accounts are also tagged fast push, burst, boosting, shared subnet or data centre; merely similar wording is grey, 「同梗」 (same meme) | Like everyone pasting from the same script. Many people can also think of the same joke, so it takes other evidence to turn red |
+| **相似帳號** (look-alike accounts) | Names that differ only in the digits at the end (crispy01, crispy02, crispy03), with at least 3 such accounts pushing in the same article within 1 hour. The shared start must be 4 characters or more (abc123 and abc124 count; ab1 and ab2 don't). Red, and in the report, only when at least 2 of them are also tagged fast push, burst, shared subnet, data centre or canned; grey otherwise | Look-alike names can be chance. A row of numbered accounts all pushing within the same hour looks like one person with a batch of spare accounts |
 
 ### Across articles: accounts that keep showing up together
 
