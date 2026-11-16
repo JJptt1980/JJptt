@@ -288,11 +288,20 @@ locale.zh_TW = {
   "options_frameStyleNetterm": {
     "message": "仿 NetTerm（懷舊）"
   },
+  "options_frameStyleKkman": {
+    "message": "仿 KKMan（懷舊）"
+  },
   "frame_wip": {
     "message": "施工中"
   },
   "frame_connecting": {
     "message": "正在連線 …"
+  },
+  "frame_online": {
+    "message": "已連線"
+  },
+  "frame_offline": {
+    "message": "未連線"
   },
   "frame_motto": {
     "message": "看 PTT，也看穿帶風向"

@@ -288,11 +288,20 @@ locale.en_US = {
   "options_frameStyleNetterm": {
     "message": "NetTerm-like (retro)"
   },
+  "options_frameStyleKkman": {
+    "message": "KKMan-like (retro)"
+  },
   "frame_wip": {
     "message": "Under construction"
   },
   "frame_connecting": {
     "message": "Connecting …"
+  },
+  "frame_online": {
+    "message": "Connected"
+  },
+  "frame_offline": {
+    "message": "Not connected"
   },
   "frame_motto": {
     "message": "看 PTT，也看穿帶風向"

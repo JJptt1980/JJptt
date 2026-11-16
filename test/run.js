@@ -1349,7 +1349,7 @@ test('視窗風格: setting, choices, page fields and text in both languages', f
   assert.strictEqual(PREF_OPTIONS.frameStyle.length, JJFrame.STYLES.length);
   var zh = fs.readFileSync(path.join(root, 'js/zh_TW_messages.js'), 'utf8');
   var en = fs.readFileSync(path.join(root, 'js/en_US_messages.js'), 'utf8');
-  ['options_frameStyle', 'frame_wip', 'frame_connecting', 'frame_motto'].concat(PREF_OPTIONS.frameStyle).forEach(function(k) {
+  ['options_frameStyle', 'frame_wip', 'frame_connecting', 'frame_motto', 'frame_online', 'frame_offline'].concat(PREF_OPTIONS.frameStyle).forEach(function(k) {
     assert.ok(zh.indexOf('"' + k + '"') >= 0, k + ' missing from zh_TW_messages.js');
     assert.ok(en.indexOf('"' + k + '"') >= 0, k + ' missing from en_US_messages.js');
   });
@@ -1367,6 +1367,7 @@ test('視窗風格: styles by number, no frame means no offset', function() {
   assert.strictEqual(JJFrame.styleFor(0), '');
   assert.strictEqual(JJFrame.styleFor(1), 'netterm');
   assert.strictEqual(JJFrame.styleFor('1'), 'netterm');
+  assert.strictEqual(JJFrame.styleFor(2), 'kkman');
   assert.strictEqual(JJFrame.styleFor(7), '');
   assert.deepStrictEqual(JJFrame.insets(), { top: 0, left: 0, right: 0, bottom: 0 });
 });
@@ -1380,6 +1381,30 @@ test('視窗風格: mouse positions, the terminal size and the reader allow for 
   assert.ok(lay.indexOf('window.innerWidth - (rect.left') < 0, 'reader places itself by the window');
   // render() lays the overlay out before show(): its box is still empty then
   assert.ok(/getComputedStyle\(o\)/.test(lay) && !/o\.getBoundingClientRect\(\)/.test(lay), 'reader reads its place from a hidden box');
+});
+test('視窗風格 KKMan: 連線時間 counts from the connection, tabs are the two sites', function() {
+  assert.strictEqual(JJFrame.upTime(0, 5000), '0:00:00', 'not connected');
+  assert.strictEqual(JJFrame.upTime(1000, 1000 + 3723 * 1000 + 400), '1:02:03');
+  var html = JJFrame.kkmanHtml();
+  ['ptt.cc', 'ptt2.cc'].forEach(function(site) { assert.ok(html.indexOf('data-site="' + site + '"') >= 0, site + ' tab missing'); });
+  ['jjf-hole', 'jjf-up', 'jjf-clock', 'jjf-addr', 'jjf-led'].forEach(function(c) { assert.ok(html.indexOf(c) >= 0, c + ' missing'); });
+  var realNow = Date.now;
+  try {
+    Date.now = function() { return 42; };
+    JJFrame.onConnect();
+    assert.strictEqual(JJFrame.connectedAt, 42);
+    JJFrame.onClose();
+    assert.strictEqual(JJFrame.connectedAt, 0, 'the clock keeps running after a disconnect');
+  } finally { Date.now = realNow; }
+});
+test('視窗風格 KKMan: the block letters spell JJptt in five colours', function() {
+  var b = JJFrame.blockCells('JJptt');
+  assert.strictEqual(b.w, 29);
+  assert.strictEqual(b.h, 9);
+  var letters = {};
+  b.cells.forEach(function(c) { letters[c.c] = true; assert.ok(c.x >= 0 && c.x < b.w && c.y >= 0 && c.y < b.h); });
+  assert.deepStrictEqual(Object.keys(letters).length, 5);
+  assert.ok(JJFrame.BLOCK_COLORS.length >= 5);
 });
 test('視窗風格: the welcome screen goes on the first data, at most once', function() {
   var calls = [];

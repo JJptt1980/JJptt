@@ -1,12 +1,12 @@
 // JJptt: classic window looks for the extension and the web version
 // (設定 → 版面 → 介面 → 視窗風格). 0 = plain (all black, the default),
-// 1 = NetTerm-like. Only the look for now: every button and menu says
+// 1 = NetTerm-like, 2 = KKMan-like. Only the look for now: every button and menu says
 // 「施工中」. The terminal (#BBSWindow) and the reader (#jjReader) are moved
 // into the frame's black hole by CSS variables set from the hole's size;
 // pttchrome.App asks JJFrame.insets() so mouse positions still map to cells.
 
 var JJFrame = {
-  STYLES: ['', 'netterm'],
+  STYLES: ['', 'netterm', 'kkman'],
   style: '',
   app: null,
   el: null,
@@ -15,7 +15,8 @@ var JJFrame = {
   cur: null,
   clockTimer: null,
   splashShownAt: 0,
-  splashWaiting: false
+  splashWaiting: false,
+  connectedAt: 0
 };
 
 // Which style a frameStyle setting means ('' for plain or anything unknown).
@@ -35,7 +36,7 @@ JJFrame.apply = function(app, n) {
   if (style === JJFrame.style) return;
   JJFrame.remove();
   JJFrame.style = style;
-  if (style === 'netterm') JJFrame.buildNetTerm();
+  if (style) JJFrame.build(style);
   JJFrame.measure();
   JJFrame.wrap();
 };
@@ -47,7 +48,7 @@ JJFrame.remove = function() {
   if (JJFrame.clockTimer) clearInterval(JJFrame.clockTimer);
   JJFrame.clockTimer = null;
   JJFrame.splashWaiting = false;
-  document.body.classList.remove('jj-frame', 'jj-frame-netterm');
+  document.body.classList.remove('jj-frame', 'jj-frame-netterm', 'jj-frame-kkman');
   JJFrame.style = '';
   JJFrame.cur = null;
 };
@@ -143,11 +144,61 @@ JJFrame.netTermHtml = function() {
       '<span>ANSI</span><span class="jjf-proto">SSH</span><span class="jjf-clock">--:--</span><span>○○○○</span></div>';
 };
 
-JJFrame.buildNetTerm = function() {
+// --- KKMan-like -------------------------------------------------------------
+// Windows 7 glass: round glossy buttons, a search box, a telnet:// address
+// bar, site tabs under the screen and a 連線時間 / 現在時間 status bar.
+
+JJFrame.KK_ICONS = {
+  back: '<svg viewBox="0 0 20 20"><path d="M12 4L6 10l6 6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  fwd: '<svg viewBox="0 0 20 20"><path d="M8 4l6 6-6 6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  conn: '<svg viewBox="0 0 20 20"><path d="M15.5 7A6 6 0 1 0 16 12" fill="none" stroke="#1d7a1d" stroke-width="2.4"/><path d="M12 6.5h5v-5" fill="none" stroke="#1d7a1d" stroke-width="2.4"/></svg>',
+  stop: '<svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" stroke="#c0281e" stroke-width="3" stroke-linecap="round"/></svg>',
+  home: '<svg viewBox="0 0 20 20"><path d="M2 10L10 3l8 7" fill="none" stroke="#2a5d9e" stroke-width="2.2" stroke-linejoin="round"/><path d="M5 9v8h4v-5h2v5h4V9" fill="#fff" stroke="#2a5d9e" stroke-width="1.6"/></svg>',
+  fav: '<svg viewBox="0 0 20 20"><path d="M10 2l2.4 5 5.4.6-4 3.7 1.1 5.4L10 14l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z" fill="#ffcc33" stroke="#b07800" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+  read: '<svg viewBox="0 0 20 20"><path d="M2 4c3-1 6-1 8 1v12c-2-2-5-2-8-1z" fill="#fff" stroke="#2a5d9e" stroke-width="1.2"/><path d="M18 4c-3-1-6-1-8 1v12c2-2 5-2 8-1z" fill="#e4f0ff" stroke="#2a5d9e" stroke-width="1.2"/></svg>',
+  fact: '<svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5" fill="#d8ecff" stroke="#2a5d9e" stroke-width="1.8"/><path d="M12.5 12.5l5 5" stroke="#2a5d9e" stroke-width="3" stroke-linecap="round"/></svg>',
+  set: '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6" fill="#d0d8e4" stroke="#56677e" stroke-width="3.2" stroke-dasharray="2.4 2.3"/><circle cx="10" cy="10" r="2.4" fill="#fff" stroke="#56677e" stroke-width="1.2"/></svg>',
+  go: '<svg viewBox="0 0 16 16"><path d="M3 8h9M8 4l4 4-4 4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  find: '<svg viewBox="0 0 16 16"><circle cx="6.5" cy="6.5" r="4.2" fill="none" stroke="#3a6ea5" stroke-width="1.8"/><path d="M9.6 9.6l4 4" stroke="#3a6ea5" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  page: '<svg viewBox="0 0 14 14"><rect x="1.5" y="2" width="11" height="10" rx="1.5" fill="#000" stroke="#4a6a8e"/><path d="M3.5 5h4M3.5 7.5h6" stroke="#7fe07f"/></svg>'
+};
+
+JJFrame.kkmanHtml = function() {
+  var I = JJFrame.KK_ICONS;
+  var rb = function(i, label) {
+    return '<span class="jjf-rb" data-jjf="' + i + '"><b>' + I[i] + '</b><em>' + label + '</em></span>';
+  };
+  var menu = ['檔案', '編輯', '檢視', '我的最愛', '工具', '說明']
+    .map(function(m) { return '<span data-jjf="menu">' + m + '</span>'; }).join('');
+  var tab = function(site, name) {
+    return '<span class="jjf-tab" data-jjf="tab" data-site="' + site + '">' + I.page + '<span>' + name + '</span><i data-jjf="close">×</i></span>';
+  };
+  return '<div class="jjf-title"><span class="jjf-logo">J</span>' +
+      '<span class="jjf-t">JJptt</span>' +
+      '<span class="jjf-cap" data-jjf="min"><i class="m"></i></span><span class="jjf-cap" data-jjf="max"><i class="x"></i></span>' +
+      '<span class="jjf-cap jjf-close" data-jjf="close">✕</span></div>' +
+    '<div class="jjf-menu">' + menu + '</div>' +
+    '<div class="jjf-tools">' +
+      '<span class="jjf-nav"><span class="jjf-big" data-jjf="back">' + I.back + '</span><span class="jjf-small" data-jjf="fwd">' + I.fwd + '</span></span>' +
+      rb('conn', '重新連線') + rb('stop', '斷線') + rb('home', '首頁') + rb('fav', '我的最愛') +
+      '<i class="jjf-sep"></i>' + rb('read', '閱讀模式') + rb('fact', '事實查核') + rb('set', '設定') +
+      '<span class="jjf-search" data-jjf="search"><span>Google</span>' + I.find + '</span></div>' +
+    '<div class="jjf-url"><span class="jjf-lbl">網址</span><span class="jjf-field" data-jjf="url"><span class="jjf-addr">telnet://ptt.cc</span><i>▾</i></span>' +
+      '<span class="jjf-go" data-jjf="go">' + I.go + '<span>連線</span></span></div>' +
+    '<div class="jjf-body"><div class="jjf-hole"></div>' +
+      '<div class="jjf-vs"><b data-jjf="up">▴</b><b class="jjf-th" data-jjf="thumb"></b><span data-jjf="track"></span><b data-jjf="down">▾</b></div></div>' +
+    '<div class="jjf-tabs">' + tab('ptt.cc', '批踢踢實業坊') + tab('ptt2.cc', '批踢踢兔') +
+      '<span class="jjf-newtab" data-jjf="newtab">+</span></div>' +
+    '<div class="jjf-status"><span class="jjf-led"></span><span class="jjf-g"></span>' +
+      '<span class="jjf-cell">連線時間 <b class="jjf-up">0:00:00</b></span>' +
+      '<span class="jjf-cell">現在時間 <b class="jjf-clock">--:--:--</b></span></div>';
+};
+
+JJFrame.build = function(style) {
   var el = document.createElement('div');
   el.id = 'jjFrame';
-  el.className = 'jjf-netterm';
-  el.innerHTML = JJFrame.netTermHtml();
+  el.className = 'jjf-' + style;
+  el.innerHTML = style === 'kkman' ? JJFrame.kkmanHtml() : JJFrame.netTermHtml();
   // The frame is not the terminal: its clicks must not move the cursor or
   // send keys, and pressing it must not take the focus from the input.
   ['click', 'dblclick', 'contextmenu', 'mousewheel', 'wheel', 'mousemove', 'mouseover'].forEach(function(t) {
@@ -171,26 +222,48 @@ JJFrame.buildNetTerm = function() {
   });
   document.body.insertBefore(el, document.body.firstChild);
   JJFrame.el = el;
-  document.body.classList.add('jj-frame', 'jj-frame-netterm');
+  document.body.classList.add('jj-frame', 'jj-frame-' + style);
   JJFrame.tick();
-  JJFrame.clockTimer = setInterval(JJFrame.tick, 15000);
+  // KKMan's clock and 連線時間 show seconds
+  JJFrame.clockTimer = setInterval(JJFrame.tick, style === 'kkman' ? 1000 : 15000);
   JJFrame.showSplash();
 };
 
-// Clock, title and connection light.
+JJFrame.pad = function(n) { return (n < 10 ? '0' : '') + n; };
+
+// How long since connecting, as h:mm:ss ('0:00:00' when not connected).
+JJFrame.upTime = function(since, now) {
+  var t = since ? Math.max(0, Math.floor((now - since) / 1000)) : 0;
+  return Math.floor(t / 3600) + ':' + JJFrame.pad(Math.floor(t / 60) % 60) + ':' + JJFrame.pad(t % 60);
+};
+
+// Clock, title, address and connection light.
 JJFrame.tick = function() {
-  if (!JJFrame.el) return;
-  var app = JJFrame.app;
+  var el = JJFrame.el;
+  if (!el) return;
+  var app = JJFrame.app, pad = JJFrame.pad;
+  var set = function(sel, text) { var n = el.querySelector(sel); if (n) n.textContent = text; };
   var d = new Date();
-  var pad = function(n) { return (n < 10 ? '0' : '') + n; };
-  JJFrame.el.querySelector('.jjf-clock').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
   var site = app && app.connectedUrl && app.connectedUrl.site;
-  JJFrame.el.querySelector('.jjf-t').textContent = site ? 'JJptt - ' + site : 'JJptt';
   var on = !!(app && app.conn && app.conn.isConnected);
-  JJFrame.el.querySelector('.jjf-led').classList.toggle('on', on);
-  JJFrame.el.querySelector('.jjf-g').textContent = on ? (site || '') : '';
   var ssh = !!(app && typeof SecureShellConnection !== 'undefined' && app.conn instanceof SecureShellConnection);
-  JJFrame.el.querySelector('.jjf-proto').textContent = ssh ? 'SSH' : 'Telnet';
+  set('.jjf-t', site ? 'JJptt - ' + site : 'JJptt');
+  var led = el.querySelector('.jjf-led');
+  if (led) led.classList.toggle('on', on);
+  if (JJFrame.style === 'kkman') {
+    set('.jjf-clock', hm + ':' + pad(d.getSeconds()));
+    set('.jjf-up', JJFrame.upTime(on && JJFrame.connectedAt, d.getTime()));
+    set('.jjf-addr', (ssh ? 'ssh://' : 'telnet://') + (site || 'ptt.cc'));
+    set('.jjf-g', (typeof i18n === 'function' && i18n(on ? 'frame_online' : 'frame_offline')) || (on ? '已連線' : '未連線'));
+    [].forEach.call(el.querySelectorAll('.jjf-tab'), function(t) {
+      t.classList.toggle('on', t.getAttribute('data-site') === (site || 'ptt.cc'));
+    });
+  } else {
+    set('.jjf-clock', hm);
+    set('.jjf-g', on ? (site || '') : '');
+    set('.jjf-proto', ssh ? 'SSH' : 'Telnet');
+  }
 };
 
 // --- welcome screen ---------------------------------------------------------
@@ -286,6 +359,52 @@ JJFrame.drawWord = function(c, sub) {
   x.putImageData(out, 0, 0);
 };
 
+// KKMan-like welcome screen: 「JJptt」 in big bevelled blocks, one colour a
+// letter, like the block letters on the BBS welcome screens of the time,
+// with rows of coloured half blocks above and below.
+JJFrame.BLOCK_FONT = {
+  J: ['#####', '...#.', '...#.', '...#.', '#..#.', '#..#.', '.##..', '.....', '.....'],
+  p: ['.....', '.....', '####.', '#...#', '#...#', '#...#', '####.', '#....', '#....'],
+  t: ['..#..', '..#..', '#####', '..#..', '..#..', '..#.#', '...#.', '.....', '.....']
+};
+JJFrame.BLOCK_COLORS = [['#ff5a4a', '#c81e14', '#ffb0a8'], ['#ff9a1e', '#c05a00', '#ffd49a'],
+  ['#ffd92a', '#b89000', '#fff2a0'], ['#4cd04a', '#1a8a1a', '#b4f4b0'], ['#3a8cff', '#1448b8', '#a8ccff']];
+
+// The cells of a word in the block font: [{x, y, c (letter number)}], and its size.
+JJFrame.blockCells = function(word) {
+  var F = JJFrame.BLOCK_FONT, out = [], x0 = 0;
+  for (var n = 0; n < word.length; n++) {
+    var g = F[word[n]];
+    for (var y = 0; y < g.length; y++) for (var x = 0; x < g[y].length; x++) {
+      if (g[y][x] === '#') out.push({ x: x0 + x, y: y, c: n });
+    }
+    x0 += 6;
+  }
+  return { cells: out, w: x0 - 1, h: 9 };
+};
+
+JJFrame.drawBlocks = function(c) {
+  var S = 16, pad = 2, b = JJFrame.blockCells('JJptt'), C = JJFrame.BLOCK_COLORS;
+  var cols = b.w + pad * 2, rows = b.h + pad * 2 + 2;
+  c.width = cols * S; c.height = rows * S;
+  var x = c.getContext('2d');
+  x.fillStyle = '#000';
+  x.fillRect(0, 0, c.width, c.height);
+  // half-block stripes, top and bottom (▄▀ in the five colours)
+  for (var i = 0; i < cols; i++) {
+    var k = C[Math.floor(i / 2) % C.length];
+    x.fillStyle = k[0]; x.fillRect(i * S, S / 2, S, S / 2);
+    x.fillStyle = C[(Math.floor(i / 2) + 2) % C.length][1]; x.fillRect(i * S, (rows - 1) * S, S, S / 2);
+  }
+  b.cells.forEach(function(e) {
+    var px = (e.x + pad) * S, py = (e.y + pad + 1) * S, k = C[e.c % C.length];
+    x.fillStyle = '#202020'; x.fillRect(px + 4, py + 4, S, S);    // shadow
+    x.fillStyle = k[1]; x.fillRect(px, py, S, S);                 // dark edge
+    x.fillStyle = k[2]; x.fillRect(px, py, S - 3, S - 3);         // lit edge
+    x.fillStyle = k[0]; x.fillRect(px + 3, py + 3, S - 6, S - 6); // face
+  });
+};
+
 JJFrame.showSplash = function() {
   var app = JJFrame.app;
   // only before the first screen comes in; switching the style later skips it
@@ -293,15 +412,25 @@ JJFrame.showSplash = function() {
   var sp = document.createElement('div');
   sp.id = 'jjFrameSplash';
   var msg = (typeof i18n === 'function' && i18n('frame_connecting')) || '正在連線 …';
-  sp.innerHTML = '<div class="jjf-art"><canvas class="jjf-globe" width="132" height="132"></canvas>' +
-    '<canvas class="jjf-word" width="360" height="96"></canvas></div><div class="jjf-conn"></div>';
+  var kk = JJFrame.style === 'kkman';
+  if (kk) sp.className = 'jjf-splash-kk';
+  sp.innerHTML = (kk ?
+    '<div class="jjf-art"><canvas class="jjf-blocks"></canvas><div class="jjf-sub"></div></div>' :
+    '<div class="jjf-art"><canvas class="jjf-globe" width="132" height="132"></canvas>' +
+    '<canvas class="jjf-word" width="360" height="96"></canvas></div>') + '<div class="jjf-conn"></div>';
   sp.querySelector('.jjf-conn').textContent = msg;
   sp.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); JJFrame.hideSplash(); });
   document.body.appendChild(sp);
   JJFrame.splashEl = sp;
+  var motto = (typeof i18n === 'function' && i18n('frame_motto')) || '看 PTT，也看穿帶風向';
   try {
-    JJFrame.drawGlobe(sp.querySelector('.jjf-globe'));
-    JJFrame.drawWord(sp.querySelector('.jjf-word'), (typeof i18n === 'function' && i18n('frame_motto')) || '看 PTT，也看穿帶風向');
+    if (kk) {
+      sp.querySelector('.jjf-sub').textContent = motto;
+      JJFrame.drawBlocks(sp.querySelector('.jjf-blocks'));
+    } else {
+      JJFrame.drawGlobe(sp.querySelector('.jjf-globe'));
+      JJFrame.drawWord(sp.querySelector('.jjf-word'), motto);
+    }
   } catch (e) { /* no canvas: the words alone */ }
   JJFrame.splashShownAt = Date.now();
   JJFrame.splashWaiting = true;
@@ -314,8 +443,9 @@ JJFrame.fitSplash = function() {
   if (!sp || !JJFrame.cur) return;
   var w = sp.clientWidth, h = sp.clientHeight;
   if (!w || !h) return;
-  var k = Math.min(1, w / 760, (h - 40) / 420);
-  sp.querySelector('.jjf-art').style.transform = 'scale(' + Math.max(0.3, k) + ')';
+  var art = sp.querySelector('.jjf-art');
+  var k = Math.min(1, w / (art.offsetWidth + 40 || 760), (h - 40) / (art.offsetHeight + 24 || 420));
+  art.style.transform = 'scale(' + Math.max(0.3, k) + ')';
 };
 
 // Called on every chunk from the site: the welcome screen goes once PTT's
@@ -340,12 +470,14 @@ JJFrame.hideSplash = function() {
 
 // Connected: the light and the title change now, not on the next tick.
 JJFrame.onConnect = function() {
+  JJFrame.connectedAt = Date.now();
   JJFrame.tick();
 };
 
 // Disconnected or could not connect: drop the welcome screen so the error
 // (#connectionAlert) and the reconnect button can be seen.
 JJFrame.onClose = function() {
+  JJFrame.connectedAt = 0;
   JJFrame.hideSplash();
   JJFrame.tick();
 };

@@ -32,7 +32,7 @@ var DEFAULT_PREFS = {
   fontFitWindowWidth: false,
   fontFace          : 'MingLiu,SymMingLiU,monospace',
   bbsMargin         : 0,
-  frameStyle        : 0,   // 0 plain, 1 NetTerm-like (js/frame_style.js)
+  frameStyle        : 0,   // 0 plain, 1 NetTerm-like, 2 KKMan-like (js/frame_style.js)
 
   // blacklist
   enableBlacklist : true,
@@ -136,7 +136,7 @@ var PREF_OPTIONS = {
   mouseWheelFunction3 : [ 'options_none', 'options_upDown' , 'options_pageUpDown', 'options_threadLastNext' ],
   countryDisplay : [ 'options_countryText', 'options_countryFlag', 'options_countryBoth' ],
   labelLayout : [ 'options_labelLayoutFull', 'options_labelLayoutCompact', 'options_labelLayoutIpFlag' ],
-  frameStyle : [ 'options_frameStylePlain', 'options_frameStyleNetterm' ],
+  frameStyle : [ 'options_frameStylePlain', 'options_frameStyleNetterm', 'options_frameStyleKkman' ],
   blacklistMode : [ 'options_blacklistFade', 'options_blacklistHide', 'options_blacklistOff' ],
   aiService : [ 'ai_chatgpt', 'ai_claude', 'ai_perplexity', 'ai_grok', 'ai_copilot', 'ai_custom' ],
 };
