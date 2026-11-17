@@ -1625,6 +1625,113 @@ test('視窗風格: a failed connection drops the welcome screen so the error sh
   assert.ok(/JJFrame\.onClose\(\)/.test(onClose), 'App.onClose does not tell the frame');
 });
 
+// The real case (Gossiping, 11/17): PTT cut orange7's URL at the end of a
+// full push and put the rest in the next one.
+var splitPushes = [
+  { id: 'TOEY', content: '能自己坦白錯誤很好，但是男性跟正常女性還' },
+  { id: 'orange7', content: 'https://houde-lawyer.com/%E6%9D%8E%E6%' },
+  { id: 'orange7', content: '83%A0%E6%9A%84/' },
+  { id: 'orange7', content: '也差太多了吧' }
+];
+var splitWhole = 'https://houde-lawyer.com/%E6%9D%8E%E6%83%A0%E6%9A%84/';
+
+test('split URL: a URL cut at the end of a full push is joined with the next push', function() {
+  var j = SplitUrl.joins(splitPushes);
+  assert.ok(!j[0], 'a push without a URL');
+  assert.deepStrictEqual(j[1], { url: splitWhole, first: true });
+  assert.deepStrictEqual(j[2], { url: splitWhole, tail: '83%A0%E6%9A%84/' });
+  assert.ok(!j[3], 'the push after the URL is not part of it');
+  // three lines: the middle one is all URL and full again
+  var mid = 'abcdefghij%E6%9D%8E%E6%83%A0%E6%9A%84/abcd';  // 7 + 42 >= 44
+  var three = SplitUrl.joins([
+    { id: 'orange7', content: 'https://houde-lawyer.com/%E6%9D%8E%E6%' },
+    { id: 'orange7', content: mid },
+    { id: 'orange7', content: 'xyz/1 看這個' }
+  ]);
+  assert.strictEqual(three[0].url, 'https://houde-lawyer.com/%E6%9D%8E%E6%' + mid + 'xyz/1');
+  assert.strictEqual(three[2].tail, 'xyz/1');
+});
+
+test('split URL: not joined when the push is not full, the user changes, or the reply is a word', function() {
+  var short = 'https://i.imgur.com/abc.jpg';
+  assert.strictEqual(SplitUrl.joins([{ id: 'orange7', content: short }, { id: 'orange7', content: '123/' }]).length, 0, 'short push');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'TOEY', content: '83%A0%E6%9A%84/' }]).length, 0, 'other user');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'orange7', content: 'XD' }]).length, 0, '"XD" is not a URL');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'orange7', content: 'https://a.com/' }]).length, 0, 'a new URL');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'orange7', content: '對啊' }]).length, 0, 'text');
+});
+
+test('split URL: reading mode and the app link both parts to the whole URL', function() {
+  var st = { fg: 3, bg: 0, hl: false, href: '' };
+  var j = SplitUrl.joins(splitPushes);
+  var a = PttReader.pushSegs(splitPushes[1].content, j[1], st, ':');
+  assert.deepStrictEqual(a.map(function(s) { return [s.text, s.st.href]; }),
+    [[':', ''], ['https://houde-lawyer.com/%E6%9D%8E%E6%', splitWhole]]);
+  var b = PttReader.pushSegs('83%A0%E6%9A%84/ 這篇', j[2], st);
+  assert.deepStrictEqual(b.map(function(s) { return [s.text, s.st.href]; }),
+    [['83%A0%E6%9A%84/', splitWhole], [' 這篇', '']]);
+  assert.ok(b[0].tail, 'the rest of a URL would show its picture twice');
+  var plain = PttReader.pushSegs('哈哈', undefined, st, ':');
+  assert.deepStrictEqual(plain.map(function(s) { return s.text; }), [':', '哈哈']);
+  ['js/reader.js', 'js/mobile_article.js'].forEach(function(f) {
+    var src = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.ok(/lineNode\(PttReader\.pushSegs\(p\.content, (join|urlJoins\[i\])/.test(src), f + ' does not join split URLs');
+  });
+  assert.ok(/!seg\.tail/.test(PttReader.prototype.lineNode.toString()), 'the rest of a URL is counted as a picture');
+});
+
+test('split URL: the terminal links both parts to the whole URL, and undoes it', function() {
+  var ctx = { SplitUrl: SplitUrl, console: console };
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'js/term_buf.js'), 'utf8'), ctx);
+  var cols = 80;
+  var row = function(text) {
+    var line = [];
+    for (var i = 0; i < cols; ++i) line.push({ ch: text.charAt(i) || ' ', partOfURL: false, startOfURL: false, endOfURL: false, fullurl: '' });
+    return line;
+  };
+  var pad = function(s) { while (s.length < 50) s += ' '; return s + ' 223.137.219.47 11/17 19:31'; };
+  var texts = ['推 orange7: https://houde-lawyer.com/%E6%9D%8E%E6%', '→ orange7: 83%A0%E6%9A%84/', '→ orange7: 也差太多了吧'];
+  var buf = { rows: 3, cols: cols, lineChangeds: [], lines: texts.map(function(t) { return row(pad(t)); }),
+    getRowText: function(r) { return this.lines[r].map(function(c) { return c.ch; }).join(''); } };
+  // what the URI pass found on the first line
+  var start = texts[0].indexOf('https'), end = texts[0].length;
+  buf.lines[0].uris = [[start, end]];
+  buf.lines[0][start].startOfURL = true;
+  buf.lines[0][start].fullurl = 'https://houde-lawyer.com/%E6%9D%8E%E6%';
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.strictEqual(buf.lines[0][start].fullurl, splitWhole, 'first part links to the cut URL');
+  var t = texts[1].indexOf('83');
+  var l1 = buf.lines[1];
+  assert.ok(l1[t].startOfURL && l1[t].partOfURL && l1[t + 14].endOfURL && l1[t + 14].partOfURL, 'rest of the URL is not a link');
+  assert.strictEqual(l1[t].fullurl, splitWhole);
+  assert.ok(!l1[t + 15].partOfURL && !l1[t - 1].partOfURL, 'link runs past the URL');
+  assert.strictEqual(JSON.stringify(l1.uris), JSON.stringify([[t, t + 15]]), 'the URI pass would not clear it');
+  assert.ok(!buf.lines[2].uris, 'the next push is not a link');
+  assert.ok(buf.lineChangeds[0] && buf.lineChangeds[1], 'rows not redrawn');
+  // the second push changes (e.g. scrolled): both parts go back
+  buf.lines[1] = row(pad('→ orange7: XD'));
+  buf.lineChangeds = [];
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.strictEqual(buf.lines[0][start].fullurl, 'https://houde-lawyer.com/%E6%9D%8E%E6%', 'first part still joined');
+  assert.ok(buf.lineChangeds[0], 'first row not redrawn');
+  // the first line goes away while the rest stays: its link goes too
+  buf.lines[0] = row(pad('推 someone: 哈哈'));
+  buf.lines[1] = row(pad(texts[1]));
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  buf.lines[0] = row(pad(texts[0]));
+  buf.lines[0].uris = [[start, end]];
+  buf.lines[0][start].startOfURL = true;
+  buf.lines[0][start].fullurl = 'https://houde-lawyer.com/%E6%9D%8E%E6%';
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.strictEqual(buf.lines[1][t].fullurl, splitWhole);
+  buf.lines[0] = row(pad('推 someone: 哈哈'));
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.ok(!buf.lines[1][t].partOfURL && !buf.lines[1].uris, 'rest of a URL still a link without its start');
+  var upd = fs.readFileSync(path.join(root, 'js/term_buf.js'), 'utf8');
+  var uca = upd.slice(upd.indexOf('updateCharAttr: function'), upd.indexOf('joinSplitUrls: function'));
+  assert.ok(/this\.joinSplitUrls\(\)/.test(uca), 'updateCharAttr does not join');
+});
+
 test('hover picture preview stays inside the window and off the mouse', function() {
   var src = fs.readFileSync(path.join(root, 'js/pttchrome.js'), 'utf8');
   var start = src.indexOf('pttchrome.App.picPreviewSide = ');

@@ -1254,7 +1254,7 @@ PttReader.prototype.lineNode = function(segs) {
       a.target = '_blank';
       a.rel = 'noreferrer';
       div.appendChild(a);
-      if (/^https?:/.test(seg.st.href)) urls.push(seg.st.href);
+      if (/^https?:/.test(seg.st.href) && !seg.tail) urls.push(seg.st.href);
       return;
     }
     var last = 0, m;
@@ -1273,6 +1273,37 @@ PttReader.prototype.lineNode = function(segs) {
   });
   if (!segs.length) div.appendChild(document.createTextNode(' '));
   return { node: div, urls: urls };
+};
+
+// Pushes whose URL was cut by PTT and goes on in the next push (SplitUrl).
+PttReader.urlJoins = function(article) {
+  if (!article.urlJoins) article.urlJoins = SplitUrl.joins(article.pushes || []);
+  return article.urlJoins;
+};
+
+// lineNode() segments for a push's content: both parts of a URL that PTT cut
+// in two link to the whole URL. The rest of a URL is not counted in urls
+// (its picture is shown under the push it starts in).
+PttReader.pushSegs = function(content, join, st, prefix) {
+  content = String(content || '');
+  var segs = prefix ? [{ text: prefix, st: st }] : [];
+  var link = { fg: st.fg, bg: st.bg, hl: st.hl, href: join ? join.url : '' };
+  var at = -1, part = '';
+  if (join && join.tail) {
+    part = join.tail;
+    at = content.indexOf(part);
+  } else if (join && join.first) {
+    part = SplitUrl.lastUrl(content);
+    at = part ? content.lastIndexOf(part) : -1;
+  }
+  if (at < 0) {
+    segs.push({ text: content, st: st });
+    return segs;
+  }
+  if (at > 0) segs.push({ text: content.slice(0, at), st: st });
+  segs.push({ text: part, st: link, tail: !!join.tail });
+  if (at + part.length < content.length) segs.push({ text: content.slice(at + part.length), st: st });
+  return segs;
 };
 
 PttReader.prototype.headerNode = function(article, h) {
@@ -1734,6 +1765,7 @@ PttReader.prototype.renderPushes = function(article) {
     if (p.ip) (idsByIp[p.ip] = idsByIp[p.ip] || {})[id] = true;
   });
 
+  var urlJoins = PttReader.urlJoins(article);
   var result = [];
   var nth = {};
   var repeatColors = {};
@@ -1809,7 +1841,8 @@ PttReader.prototype.renderPushes = function(article) {
       idEl.appendChild(w);
     }
     left.appendChild(idEl);
-    var content = self.lineNode([{ text: ':' + p.content, st: { fg: 3, bg: 0, hl: false, href: '' } }]);
+    var join = urlJoins[i];
+    var content = self.lineNode(PttReader.pushSegs(p.content, join, { fg: 3, bg: 0, hl: false, href: '' }, ':'));
     var c = content.node;
     while (c.firstChild) left.appendChild(c.firstChild);
     line.appendChild(left);
