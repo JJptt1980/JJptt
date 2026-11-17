@@ -124,6 +124,9 @@ locale.zh_TW = {
   "update_needHost": {
     "message": "自動更新需要新版的本機程式：請在 jjptt/native-host 資料夾重新執行一次安裝（Mac：sh install.sh）。"
   },
+  "update_notChanged": {
+    "message": "已在 jjptt 資料夾執行 git pull，但版本還是 v%s，沒有更新到。git 的回應："
+  },
   "update_failedRun": {
     "message": "自動更新失敗。"
   },

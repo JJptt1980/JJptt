@@ -124,6 +124,9 @@ locale.en_US = {
   "update_needHost": {
     "message": "One-click update needs the new native host: run the installer in jjptt/native-host once more (Mac: sh install.sh)."
   },
+  "update_notChanged": {
+    "message": "Ran git pull in the jjptt folder, but it is still v%s. git said:"
+  },
   "update_failedRun": {
     "message": "Automatic update failed."
   },

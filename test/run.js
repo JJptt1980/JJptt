@@ -1506,6 +1506,38 @@ test('reader: space past the end of the last article goes back to the list, not 
 });
 
 // ---- classic window frames (js/frame_style.js) ----------------------------
+console.log('extension update bar');
+vm.runInThisContext(fs.readFileSync(path.join(root, 'js/updater.js'), 'utf8'), { filename: 'js/updater.js' });
+test('update bar: closed with × for a version, it does not come back for that version (each check, opening settings)', function() {
+  var store = {};
+  global.localStorage = { getItem: function(k) { return k in store ? store[k] : null; }, setItem: function(k, v) { store[k] = String(v); } };
+  try {
+    var u = Object.create(JJUpdater.prototype);
+    var bars = [];
+    u.running = function() { return '1.35.1'; };
+    u.setStatus = u.startPolling = u.stopPolling = u.hideBar = function() {};
+    u.app = { showToast: function() {} };
+    var close = null;
+    u.showBar = function(text, btn, action, version) {
+      bars.push(version);
+      close = function() { localStorage.setItem(JJUpdater.CLOSED_KEY, version); };  // what × does
+    };
+    u.diskVersion = '1.35.1';
+    u.remoteVersion = '1.35.2';
+    u.refresh(false);
+    sameJson(bars, ['1.35.2']);
+    close();
+    u.refresh(false);
+    sameJson(bars, ['1.35.2'], 'not again for 1.35.2');
+    u.refresh(true);
+    sameJson(bars, ['1.35.2', '1.35.2'], 'the settings button still shows it');
+    u.remoteVersion = '1.35.3';
+    u.refresh(false);
+    sameJson(bars, ['1.35.2', '1.35.2', '1.35.3'], 'a newer version is shown again');
+  } finally {
+    delete global.localStorage;
+  }
+});
 vm.runInThisContext(fs.readFileSync(path.join(root, 'js/frame_style.js'), 'utf8'), { filename: 'js/frame_style.js' });
 test('視窗風格: setting, choices, page fields and text in both languages', function() {
   assert.strictEqual(DEFAULT_PREFS.frameStyle, 0, 'plain (all black) stays the default');
