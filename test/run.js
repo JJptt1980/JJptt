@@ -1625,6 +1625,28 @@ test('視窗風格: a failed connection drops the welcome screen so the error sh
   assert.ok(/JJFrame\.onClose\(\)/.test(onClose), 'App.onClose does not tell the frame');
 });
 
+test('hover picture preview stays inside the window and off the mouse', function() {
+  var src = fs.readFileSync(path.join(root, 'js/pttchrome.js'), 'utf8');
+  var start = src.indexOf('pttchrome.App.picPreviewSide = ');
+  assert.ok(start >= 0, 'picPreviewSide missing');
+  var ctx = { pttchrome: { App: {} }, Math: Math };
+  vm.runInNewContext(src.slice(start, src.indexOf('\n};', start) + 3), ctx);
+  var side = ctx.pttchrome.App.picPreviewSide;
+  // the reported case: 679px window, mouse at 217, picture 608px wide
+  var p = side(217, 608, 679);
+  assert.strictEqual(p.right, true, 'more room on the right');
+  assert.ok(217 + 20 + p.maxWidth <= 679, 'runs past the right edge');
+  // mouse near the right edge: goes left, not over the mouse
+  p = side(600, 500, 679);
+  assert.strictEqual(p.right, false);
+  assert.ok(600 - 20 - p.maxWidth >= 0, 'runs past the left edge');
+  // small picture with room on the right stays on the right
+  assert.strictEqual(side(500, 100, 679).right, true);
+  assert.strictEqual(side(500, 100, 679).maxWidth, 155);
+  var upd = src.slice(src.indexOf('prototype.updatePicPreviewPosition'), start);
+  assert.ok(/'left:'\+left\+'px'/.test(upd) && !/curX\+20\)\+'px'/.test(upd), 'still always right of the mouse');
+});
+
 test('the settings page does not wipe the temporary blacklist list', function() {
   var src = PttChromePref.prototype.updateSettingsToUi.toString();
   var skip = src.indexOf("i === 'tempBlacklist'"), wipe = src.indexOf("$('#opt_'+i).empty()");
