@@ -1680,6 +1680,185 @@ test('split URL: reading mode and the app link both parts to the whole URL', fun
   assert.ok(/!seg\.tail/.test(PttReader.prototype.lineNode.toString()), 'the rest of a URL is counted as a picture');
 });
 
+test('split URL: the whole URL gets its thumbnail or link card, and is the one fetched ahead', function() {
+  var j = SplitUrl.joins(splitPushes);
+  assert.ok(PttReader.pushMedia(splitWhole, j[1]), 'a joined web page gets no card');
+  assert.ok(!PttReader.pushMedia('https://houde-lawyer.com/x', undefined), 'a plain web page link in a push gets a card');
+  assert.ok(PttReader.pushMedia('https://i.imgur.com/abcdefg.jpg', undefined), 'pictures in pushes');
+  ['js/reader.js', 'js/mobile_article.js'].forEach(function(f) {
+    var src = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.ok(/PttReader\.pushMedia\(u, (join|urlJoins\[i\])\)/.test(src), f + ' shows only pictures under pushes');
+  });
+  var fetched = [], realImage = global.Image;
+  global.Image = function() {};
+  try {
+    var article = { pushes: splitPushes, text: splitPushes.map(function(p) { return p.content; }).join('\n') };
+    PttReader.prototype.preloadMedia.call({
+      preloadImages: function() { return true; },
+      displaySrc: function(s) { return s; },
+      previewPermission: function() { return { then: function(f) { f(true); } }; },
+      fetchPreview: function(u) { fetched.push(u); return { then: function() {} }; }
+    }, article);
+  } finally { global.Image = realImage; }
+  assert.deepStrictEqual(fetched, [splitWhole], 'the cut URL is fetched (HTTP 400) instead of the whole one');
+});
+
+test('reader: a picture refused without a referrer (i.verb.tw, 403) is tried once more with one', function() {
+  var attrs = { src: 'https://i.verb.tw/ck58LPU3.jpg' }, sets = [];
+  var im = { referrerPolicy: 'no-referrer', style: {},
+    getAttribute: function(k) { return attrs[k]; },
+    removeAttribute: function(k) { delete attrs[k]; },
+    setAttribute: function(k, v) { attrs[k] = v; sets.push(v); } };
+  var onError = PttReader.imageRetry(im);
+  onError();
+  assert.strictEqual(im.referrerPolicy, 'strict-origin-when-cross-origin', 'not retried with a referrer');
+  assert.deepStrictEqual(sets, ['https://i.verb.tw/ck58LPU3.jpg'], 'not loaded again');
+  assert.notStrictEqual(im.style.display, 'none', 'hidden before the retry');
+  onError();
+  assert.strictEqual(im.style.display, 'none', 'a picture that fails twice stays on screen');
+  assert.strictEqual(sets.length, 1, 'retried more than once');
+  var src = fs.readFileSync(path.join(root, 'js/reader.js'), 'utf8');
+  assert.ok(/addEventListener\('error', PttReader\.imageRetry\(im\)\)/.test(src), 'article / push pictures are not retried');
+  assert.ok((src.match(/PttReader\.imageRetry\(/g) || []).length >= 3, 'hover preview and link-card pictures are not retried');
+});
+
+test('YouTube links: Shorts, phone, live and watch?…&v= are videos too', function() {
+  var id = function(u) { return u.parseYoutubeUrl(); };
+  assert.strictEqual(id('https://youtube.com/shorts/0tGN0HRUZkQ?si=p1eJoQZWfmEUPoHW'), '0tGN0HRUZkQ');
+  assert.strictEqual(id('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://m.youtube.com/watch?feature=share&v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://youtu.be/dQw4w9WgXcQ?t=30'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://www.youtube.com/live/dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://www.youtube.com/@channel'), null);
+  assert.strictEqual(id('https://example.com/?u=https://youtu.be/dQw4w9WgXcQ'), null, 'a YouTube URL inside another one');
+  assert.ok(PttReader.pushMedia('https://youtube.com/shorts/0tGN0HRUZkQ'), 'videos in pushes get no thumbnail');
+});
+
+test('short links in pushes: a card only when they lead to YouTube', function() {
+  assert.ok(PttReader.isShortLink('https://reurl.cc/mzVaZl'));
+  assert.ok(PttReader.isShortLink('https://bit.ly/3abcDEF'));
+  assert.ok(!PttReader.isShortLink('https://reurl.cc/'), 'the site itself');
+  assert.ok(!PttReader.isShortLink('https://ppt.cc/fAbcd'), 'ppt.cc is a picture host');
+  assert.ok(!PttReader.isShortLink('https://example.com/abc'));
+  // the reurl.cc page (11/17): the target is in a hidden field
+  var reurl = { querySelector: function(sel) {
+    return /input/.test(sel) ? { getAttribute: function() { return 'https://youtube.com/shorts/0tGN0HRUZkQ?si=p1eJoQZWfmEUPoHW'; } } : null;
+  } };
+  assert.strictEqual(PttReader.pageTarget(reurl, '').parseYoutubeUrl(), '0tGN0HRUZkQ');
+  var none = { querySelector: function() { return null; } };
+  assert.strictEqual(PttReader.pageTarget(none, '<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">x</a>').parseYoutubeUrl(), 'dQw4w9WgXcQ');
+  assert.strictEqual(PttReader.pageTarget(none, '<p>nothing</p>'), '');
+  assert.ok(/PttReader\.pageTarget\(doc, html\)/.test(PttReader.prototype.fetchPreview.toString()), 'previews do not look for the target');
+
+  // fake DOM for the cards
+  var mk = function(tag, cls) {
+    var kids = [], classes = (cls || '').split(' ').filter(Boolean), attrs = {};
+    var n = { tagName: tag, style: {}, childNodes: kids, parentNode: null,
+      get className() { return classes.join(' '); }, set className(v) { classes = String(v).split(' ').filter(Boolean); },
+      classList: { contains: function(c) { return classes.indexOf(c) >= 0; }, add: function(c) { if (classes.indexOf(c) < 0) classes.push(c); },
+                   remove: function(c) { classes = classes.filter(function(x) { return x !== c; }); } },
+      setAttribute: function(k, v) { attrs[k] = v; }, getAttribute: function(k) { return attrs[k]; },
+      addEventListener: function() {},
+      appendChild: function(c) { c.parentNode = n; kids.push(c); return c; },
+      insertBefore: function(c, ref) { c.parentNode = n; var i = kids.indexOf(ref); kids.splice(i < 0 ? 0 : i, 0, c); return c; },
+      removeChild: function(c) { kids.splice(kids.indexOf(c), 1); c.parentNode = null; },
+      querySelector: function(sel) {
+        var want = sel.replace(/^\./, ''), found = null;
+        (function walk(list) { list.forEach(function(k) { if (!found && k.classList.contains(want)) found = k; if (!found) walk(k.childNodes); }); })(kids);
+        return found;
+      } };
+    return n;
+  };
+  var realDoc = global.document;
+  global.document = { createElement: function(tag) { return mk(tag); } };
+  try {
+    var shortCard = function() {
+      var wrap = mk('div', 'jjr-media'), page = mk('div');
+      page.appendChild(wrap);
+      var card = mk('a', 'jjr-card jjr-short');
+      card.setAttribute('data-preview-url', 'https://reurl.cc/mzVaZl');
+      var text = mk('div', 'jjr-card-text');
+      text.appendChild(mk('div', 'jjr-card-host'));
+      card.appendChild(text);
+      wrap.appendChild(card);
+      return { page: page, wrap: wrap, card: card };
+    };
+    var answer = function(info) { return { fetchPreview: function() { return { then: function(f) { f(info); } }; }, displaySrc: function(s) { return s; } }; };
+    var yt = shortCard();
+    PttReader.prototype.fillCard.call(answer({ title: '- YouTube', youtube: '0tGN0HRUZkQ' }), yt.card);
+    assert.ok(yt.card.classList.contains('jjr-yt') && !yt.card.classList.contains('jjr-short'), 'short link to YouTube not shown as a video');
+    var box = yt.card.querySelector('.jjr-yt-thumb');
+    assert.ok(box, 'no thumbnail');
+    assert.strictEqual(box.childNodes[0].src, 'https://i.ytimg.com/vi/0tGN0HRUZkQ/hqdefault.jpg');
+    assert.ok(box.querySelector('.jjr-yt-play'), 'no YouTube play button on the thumbnail');
+    assert.strictEqual(yt.card.querySelector('.jjr-card-host').textContent, 'YouTube');
+    var other = shortCard();
+    PttReader.prototype.fillCard.call(answer({ title: 'Some shop', image: 'https://x/y.jpg' }), other.card);
+    assert.strictEqual(other.page.childNodes.length, 0, 'short link that is not a video still has a card');
+    // in the article body a short link keeps its usual card
+    var src = PttReader.prototype.linkBlock.toString();
+    assert.ok(/inPush && PttReader\.isShortLink\(url\)/.test(src), 'short links in the article lose their card');
+    // a YouTube card drawn directly also has the play button
+    var direct = PttReader.ytThumb('dQw4w9WgXcQ');
+    assert.ok(direct.querySelector('.jjr-yt-play'));
+  } finally { global.document = realDoc; }
+  var css = fs.readFileSync(path.join(root, 'css/main.css'), 'utf8');
+  assert.ok(/\.jjr-yt-play \{[^}]*position: absolute/.test(css) && /\.jjr-yt-play::after/.test(css), 'play button has no style');
+  ['js/reader.js', 'js/mobile_article.js'].forEach(function(f) {
+    assert.ok(/linkBlock\(u, true, true\)/.test(fs.readFileSync(path.join(root, f), 'utf8')), f + ': push media not marked as in a push');
+  });
+});
+
+test('imgur album in a push: shown as its first picture, not an empty card', function() {
+  assert.ok(PttReader.isImgurAlbum('https://imgur.com/a/gj1g3yJ'));
+  assert.ok(PttReader.isImgurAlbum('https://imgur.com/gallery/some-title-gj1g3yJ'));
+  assert.ok(PttReader.isImgurAlbum('https://m.imgur.com/a/gj1g3yJ'));
+  assert.ok(!PttReader.isImgurAlbum('https://imgur.com/gj1g3yJ'), 'a single picture is not an album');
+  assert.ok(!PttReader.isImgurAlbum('https://i.imgur.com/59qIm1A.jpeg'));
+  assert.ok(PttReader.pushMedia('https://imgur.com/a/gj1g3yJ'), 'albums get nothing under the push');
+  assert.strictEqual(PttReader.albumPicture('https://i.imgur.com/59qIm1A.jpeg?fb'), 'https://i.imgur.com/59qIm1A.jpeg', 'the Facebook crop is shown');
+  // the card is replaced by the picture once the album page is read
+  var replaced = null;
+  var card = { classList: { contains: function(c) { return c === 'jjr-imgur-album'; }, add: function() {} },
+    getAttribute: function() { return 'https://imgur.com/a/gj1g3yJ'; },
+    parentNode: { replaceChild: function(n) { replaced = n; } } };
+  var realDoc = global.document;
+  global.document = { createElement: function(tag) {
+    var a = {};
+    return { tagName: tag, style: {}, setAttribute: function(k, v) { a[k] = v; }, getAttribute: function(k) { return a[k]; },
+             addEventListener: function() {}, appendChild: function() {} };
+  } };
+  try {
+    PttReader.prototype.fillCard.call({
+      displaySrc: function(s) { return PttReader.lowResSrc(s); },
+      fetchPreview: function() { return { then: function(f) { f({ title: 'imgur.com', image: 'https://i.imgur.com/59qIm1A.jpeg?fb' }); } }; }
+    }, card);
+  } finally { global.document = realDoc; }
+  assert.ok(replaced, 'album card not replaced by its picture');
+  assert.strictEqual(replaced.className, 'jjr-img');
+  assert.strictEqual(replaced.src, 'https://i.imgur.com/59qIm1Al.jpg', 'not the low-res picture like other imgur pictures');
+  assert.strictEqual(replaced.getAttribute('data-full'), 'https://i.imgur.com/59qIm1A.jpeg', 'click does not open the full picture');
+});
+
+test('reader: ↓ pressed again right after moving to the next article does not reach PTT', function() {
+  var r = Object.create(PttReader.prototype);
+  var key = function(k, mod) { return { key: k, ctrlKey: !!mod, metaKey: false, altKey: false }; };
+  r.navFrom = { key: 'Gossiping|a|t', at: Date.now() };
+  ['ArrowDown', ' ', 'ArrowRight', 'Enter', 'PageDown', 'ArrowUp'].forEach(function(k) {
+    assert.ok(r.swallowsNavKey(key(k)), k + ' goes to PTT while it is still moving');
+  });
+  assert.ok(!r.swallowsNavKey(key('ArrowLeft')), '← (back to the list) is kept');
+  assert.ok(!r.swallowsNavKey(key('X')), 'X is kept');
+  assert.ok(!r.swallowsNavKey(key('ArrowDown', true)), 'browser shortcuts are kept');
+  r.navFrom = { key: 'Gossiping|a|t', at: Date.now() - PttReader.NAV_SWALLOW_MS - 10 };
+  assert.ok(!r.swallowsNavKey(key('ArrowDown')), 'keys are held back too long');
+  r.navFrom = null;
+  assert.ok(!r.swallowsNavKey(key('ArrowDown')), 'keys held back without a move');
+  var src = PttReader.prototype.ensureOverlay.toString();
+  var closed = src.slice(src.indexOf('if (!self.isOpen())'), src.indexOf('self.onKeyDown(e)'));
+  assert.ok(/swallowsNavKey\(e\)/.test(closed) && /stopPropagation/.test(closed), 'closed reader lets the keys through');
+});
+
 test('split URL: the terminal links both parts to the whole URL, and undoes it', function() {
   var ctx = { SplitUrl: SplitUrl, console: console };
   vm.runInNewContext(fs.readFileSync(path.join(root, 'js/term_buf.js'), 'utf8'), ctx);
@@ -1891,6 +2070,38 @@ test('Z 搜尋推文數 question on the bottom row: the filled list stays, no ke
     console.log = log;
   }
 });
+test('hidden 置底: ↓ on the last article stays there (no jump onto a hidden pinned post and back)', function() {
+  var log = console.log; console.log = function() {};
+  try {
+    var sent = [];
+    var lastRows = listScreen(range(780708, 780724), 3, 780724);
+    var v = listView(lastRows, sent);
+    v.updateListMap();
+    listView(listScreen(range(780688, 780707), 0, 780704), sent, v.pinFillState).updateListMap();
+    var atLast = listView(lastRows, sent, v.pinFillState);
+    atLast.updateListMap();
+    assert.ok(atLast.listAtLastBeforePinned(), 'cursor on the last article: ↓ would go onto a hidden pinned post');
+    var oneUp = listView(listScreen(range(780708, 780724), 3, 780723), sent, v.pinFillState);
+    oneUp.updateListMap();
+    assert.ok(!oneUp.listAtLastBeforePinned(), '↓ blocked one article before the last');
+    // last article at the bottom of a page, pinned posts on the next page:
+    // not known from this page, ↓ goes to PTT (it is pulled back as before)
+    var full = listView(listScreen(range(780705, 780724), 0, 780724), sent, v.pinFillState);
+    full.updateListMap();
+    assert.ok(!full.listAtLastBeforePinned(), '↓ blocked without pinned posts on the page');
+    // pinned posts shown: nothing to stop at
+    var shown = listView(lastRows, sent);
+    shown.bbscore.pref.values.hidePinned = false;
+    shown.updateListMap();
+    assert.ok(!shown.listAtLastBeforePinned(), '↓ blocked with the pinned posts on screen');
+  } finally {
+    console.log = log;
+  }
+  var src = TermView.prototype.onkeyDown.toString();
+  var down = src.slice(src.indexOf('case 40:'), src.indexOf('case 45:'));
+  assert.ok(/listAtLastBeforePinned\(\)/.test(down), '↓ does not check for the last article');
+});
+
 test('a page without pinned posts is shown as PTT draws it', function() {
   var v = listView(listScreen(range(780688, 780707), 0, 780700), []);
   v.updateListMap();

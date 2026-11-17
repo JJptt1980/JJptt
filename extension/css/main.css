@@ -964,6 +964,16 @@ span {
 }
 #jjReader .jjr-yt { padding: 0; }
 #jjReader .jjr-card-thumb { display: block; width: 100%; padding: 0; background: #111; }
+/* YouTube thumbnail: the red play button on it says "video" (a tap opens YouTube) */
+.jjr-yt-thumb { position: relative; display: block; width: 100%; line-height: 0; }
+.jjr-yt-play {
+  position: absolute; left: 50%; top: 50%; width: 68px; height: 48px; margin: -24px 0 0 -34px;
+  border-radius: 12px; background: #ff0033; box-shadow: 0 2px 8px rgba(0,0,0,.45); pointer-events: none;
+}
+.jjr-yt-play::after {
+  content: ''; position: absolute; left: 27px; top: 14px;
+  border-style: solid; border-width: 10px 0 10px 17px; border-color: transparent transparent transparent #fff;
+}
 #jjReader .jjr-card-host { color: #9aa0a6; font-size: 14px; }
 #jjReader .jjr-card-url { margin-top: 4px; font-size: 15px; word-break: break-all; }
 #jjReader .jjr-pushes { margin-top: 28px; border-top: 1px solid #333; padding-top: 14px; }
@@ -1733,6 +1743,7 @@ body.jj-mobile .jjm {
 .jjm .jjr-card-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: var(--r-md); flex: 0 0 auto; }
 .jjm .jjr-card.jjr-yt { flex-direction: column; }
 .jjm .jjr-card.jjr-yt .jjr-card-thumb { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.jjm .jjr-yt-thumb .jjr-card-thumb { display: block; }
 .jjm .jjr-card-text { min-width: 0; font-size: var(--f-md); line-height: 1.4; }
 .jjm .jjr-card-host { color: var(--sub); font-size: var(--f-sm); }
 

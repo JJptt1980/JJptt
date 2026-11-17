@@ -667,7 +667,7 @@ JJMobile.prototype.pushInfo = function(article, fact) {
     row.appendChild(content.node);
     if (!black && !(id in notes)) {  // no thumbnails for blacklisted or custom-list users
       content.urls.forEach(function(u) {
-        if (PttReader.imageSrc(u)) row.appendChild(reader.linkBlock(u, true));
+        if (PttReader.pushMedia(u, urlJoins[i])) row.appendChild(reader.linkBlock(u, true, true));
       });
     }
     out[i] = row;

@@ -226,15 +226,11 @@ String.prototype.parsePushthreadForUserId = function() {
   return null;
 };
 
+// YouTube video id: youtu.be/ID, youtube.com/watch?v=ID (v anywhere in the
+// query), /shorts/ID, /live/ID, /embed/ID, on www., m. or music.
 String.prototype.parseYoutubeUrl = function() {
-  var str = this;
-  var regex = new RegExp(/https?:\/\/(?:(?:youtu\.be\/)|(?:www.youtube.com\/watch\?v=))([\w-]+)/g);
-  var result = regex.exec(str);
-  if (result && result.length == 2) {
-    return result[1];
-  }
-
-  return null;
+  var m = /^https?:\/\/(?:(?:www\.|m\.|music\.)?youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([\w-]{6,})/i.exec(String(this));
+  return m ? m[1] : null;
 };
 
 String.prototype.ansiHalfColorConv = function() {

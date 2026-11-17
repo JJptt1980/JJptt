@@ -527,7 +527,17 @@ PttReader.prototype.ensureOverlay = function() {
   // Keys are taken at the document level while the view is open, so they
   // keep working wherever focus went (clicked image, link, ...).
   document.addEventListener('keydown', function(e) {
-    if (!self.isOpen()) return;
+    if (!self.isOpen()) {
+      // ↓ is pressed again and again (or held) to read to the end: the
+      // presses after the one that moved to the next article must not reach
+      // PTT before it answers, or it moves once more -- on the last article
+      // that opened the same one a second time
+      if (self.swallowsNavKey(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     if ($('#prefModal').is(':visible')) return;
     // Ctrl/Cmd+C with text selected: copy it here so the terminal's own
@@ -600,9 +610,14 @@ PttReader.prototype.showHoverPreview = function(src, e) {
     p.addEventListener('load', function() {
       if (self.lastMouse) self.placeHoverPreview(self.lastMouse);
     });
+    var retry = PttReader.imageRetry(p);
+    p.addEventListener('error', function() { if (p.referrerPolicy === 'no-referrer') retry(); });
     this.overlay.appendChild(p);
   }
-  if (p.getAttribute('src') !== src) p.setAttribute('src', src);
+  if (p.getAttribute('src') !== src) {
+    p.referrerPolicy = 'no-referrer';
+    p.setAttribute('src', src);
+  }
   p.style.display = 'block';
   this.placeHoverPreview(e);
 };
@@ -770,6 +785,17 @@ PttReader.prototype.navKeys = function(dir) {
   var pref = this.app.pref;
   if (pref && pref.values && pref.values.listNewestFirst) dir = -dir;
   return dir < 0 ? PttReader.KEYS_PREV : PttReader.KEYS_NEXT;
+};
+
+PttReader.NAV_SWALLOW_MS = 1500;
+
+// Moving keys pressed while the move to the previous / next article is on
+// its way (navFrom is cleared when PTT shows an article).
+PttReader.prototype.swallowsNavKey = function(e) {
+  var nav = this.navFrom;
+  if (!nav || Date.now() - nav.at > PttReader.NAV_SWALLOW_MS) return false;
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  return /^(ArrowDown|ArrowUp|ArrowRight|PageDown|PageUp|Enter| )$/.test(e.key);
 };
 
 PttReader.prototype.closeAndSend = function(keys) {
@@ -953,6 +979,12 @@ PttReader.prototype.preloadMedia = function(article) {
   this.preloaded = this.preloaded || [];
   var seen = {};
   var urls = String(article.text || '').match(/https?:\/\/[^\s<>"'，。）)]+/g) || [];
+  // a URL that PTT cut in two: fetch the whole one, not its first part
+  PttReader.urlJoins(article).forEach(function(j, i) {
+    if (!j || !j.first) return;
+    var at = urls.indexOf(SplitUrl.lastUrl(article.pushes[i].content));
+    if (at >= 0) urls[at] = j.url;
+  });
   var get = function(src) {
     if (!src || seen[src]) return;
     seen[src] = true;
@@ -975,7 +1007,11 @@ PttReader.prototype.preloadMedia = function(article) {
   this.previewPermission().then(function(ok) {
     if (!ok) return;
     cards.slice(0, 15).forEach(function(u) {
-      self.fetchPreview(u).then(function(info) { if (info && info.image) get(info.image); });
+      self.fetchPreview(u).then(function(info) {
+        if (info && info.youtube) get('https://i.ytimg.com/vi/' + info.youtube + '/hqdefault.jpg');
+        if (!info || !info.image) return;
+        get(PttReader.isImgurAlbum(u) ? self.displaySrc(PttReader.albumPicture(info.image)) : info.image);
+      });
     });
   });
 };
@@ -988,7 +1024,7 @@ PttReader.prototype.displaySrc = function(src) {
 
 // Link line plus its media (image, video, YouTube or link card). With
 // mediaOnly the link text itself is left out (it is already in the text).
-PttReader.prototype.linkBlock = function(url, mediaOnly) {
+PttReader.prototype.linkBlock = function(url, mediaOnly, inPush) {
   var el = PttReader.el;
   var wrap = el('div', 'jjr-media');
   var a = el('a', 'jjr-link', url);
@@ -1011,17 +1047,14 @@ PttReader.prototype.linkBlock = function(url, mediaOnly) {
     im.referrerPolicy = 'no-referrer';
     im.src = this.displaySrc(img);
     im.setAttribute('data-full', img);
-    im.addEventListener('error', function() { im.style.display = 'none'; });
+    im.addEventListener('error', PttReader.imageRetry(im));
     wrap.appendChild(im);
   } else if (yt) {
     var card = el('a', 'jjr-card jjr-yt');
     card.href = url;
     card.target = '_blank';
     card.rel = 'noreferrer';
-    var thumb = el('img', 'jjr-card-thumb');
-    thumb.loading = 'lazy';
-    thumb.src = 'https://i.ytimg.com/vi/' + yt.split(/[?&]/)[0] + '/hqdefault.jpg';
-    card.appendChild(thumb);
+    card.appendChild(PttReader.ytThumb(yt.split(/[?&]/)[0]));
     var ytText = el('div', 'jjr-card-text');
     ytText.appendChild(el('div', 'jjr-card-host', 'YouTube'));
     card.appendChild(ytText);
@@ -1032,7 +1065,8 @@ PttReader.prototype.linkBlock = function(url, mediaOnly) {
     // image once previews are allowed (see loadPreviews).
     var host = '';
     try { host = new URL(url).hostname; } catch (e) {}
-    var c = el('a', 'jjr-card');
+    var c = el('a', 'jjr-card' + (PttReader.isImgurAlbum(url) ? ' jjr-imgur-album' : '') +
+      (inPush && PttReader.isShortLink(url) ? ' jjr-short' : ''));
     c.href = url;
     c.target = '_blank';
     c.rel = 'noreferrer';
@@ -1043,6 +1077,22 @@ PttReader.prototype.linkBlock = function(url, mediaOnly) {
     wrap.appendChild(c);
   }
   return wrap;
+};
+
+// Error handler for a picture loaded without a referrer: some hosts
+// (i.verb.tw) refuse those (403) but show it with one, so try once more with
+// the browser's normal referrer before hiding it.
+PttReader.imageRetry = function(im) {
+  return function() {
+    if (im.referrerPolicy === 'no-referrer') {
+      im.referrerPolicy = 'strict-origin-when-cross-origin';
+      var src = im.getAttribute('src');
+      im.removeAttribute('src');
+      im.setAttribute('src', src);
+      return;
+    }
+    im.style.display = 'none';
+  };
 };
 
 // ---- link previews ----------------------------------------------------------
@@ -1072,6 +1122,7 @@ PttReader.prototype.loadPreviews = function(root) {
   this.previewPermission().then(function(ok) {
     for (var i = 0; i < cards.length; ++i) {
       if (ok) self.fillCard(cards[i]);
+      else if (cards[i].classList.contains('jjr-short')) PttReader.dropCard(cards[i]);  // can't tell where it goes
       else self.offerPreview(cards[i], root);
     }
   });
@@ -1139,6 +1190,9 @@ PttReader.prototype.fetchPreview = function(url) {
         image: image,
         site: meta(['og:site_name'])
       };
+      // a short link's page that leads to a YouTube video
+      var yt = String(res.url).parseYoutubeUrl() || String(PttReader.pageTarget(doc, html)).parseYoutubeUrl();
+      if (yt) info.youtube = yt;
       // MSN article pages are built by script and carry no og: tags; their
       // content API has the title, summary and pictures
       var msn = /^https?:\/\/(?:www\.)?msn\.com\/([a-z]{2}-[a-z]{2})\/.*\/ar-([A-Za-z0-9]+)/i.exec(res.url);
@@ -1152,12 +1206,69 @@ PttReader.prototype.fetchPreview = function(url) {
   return p;
 };
 
+// YouTube thumbnail with YouTube's red play button on it, so it reads as a
+// video even though a tap opens YouTube rather than playing here.
+PttReader.ytThumb = function(id) {
+  var box = PttReader.el('span', 'jjr-yt-thumb');
+  var thumb = PttReader.el('img', 'jjr-card-thumb');
+  thumb.loading = 'lazy';
+  thumb.src = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
+  box.appendChild(thumb);
+  var play = PttReader.el('span', 'jjr-yt-play');
+  play.setAttribute('aria-hidden', 'true');
+  box.appendChild(play);
+  return box;
+};
+
+// A short link card turned into a YouTube card (thumbnail; tap opens it).
+PttReader.youtubeCard = function(card, id) {
+  card.classList.add('jjr-yt');
+  card.classList.remove('jjr-short');
+  var allow = card.querySelector('.jjr-card-allow');
+  if (allow) allow.parentNode.removeChild(allow);
+  card.insertBefore(PttReader.ytThumb(id), card.firstChild);
+  var host = card.querySelector('.jjr-card-host');
+  if (host) host.textContent = 'YouTube';
+};
+
+// A card that should not stay (a short link that is not a video): removed
+// with its wrapper when nothing else is in it.
+PttReader.dropCard = function(card) {
+  var wrap = card.parentNode;
+  if (!wrap) return;
+  wrap.removeChild(card);
+  if (wrap.classList && wrap.classList.contains('jjr-media') && !wrap.childNodes.length && wrap.parentNode) {
+    wrap.parentNode.removeChild(wrap);
+  }
+};
+
 PttReader.prototype.fillCard = function(card) {
   var el = PttReader.el;
   var url = card.getAttribute('data-preview-url');
   var isYt = card.classList.contains('jjr-yt');
+  var self = this;
+  var isShort = card.classList.contains('jjr-short');
   this.fetchPreview(url).then(function(info) {
+    if (isShort) {
+      if (info && info.youtube) PttReader.youtubeCard(card, info.youtube);
+      else PttReader.dropCard(card);
+      return;
+    }
+    if (info && info.youtube && !card.classList.contains('jjr-yt')) {
+      PttReader.youtubeCard(card, info.youtube);
+      return;
+    }
     if (!info || !(info.title || info.image)) return;
+    if (info.image && card.classList.contains('jjr-imgur-album') && card.parentNode) {
+      var full = PttReader.albumPicture(info.image);
+      var pic = el('img', 'jjr-img');
+      pic.referrerPolicy = 'no-referrer';
+      pic.src = self.displaySrc(full);
+      pic.setAttribute('data-full', full);
+      pic.addEventListener('error', PttReader.imageRetry(pic));
+      card.parentNode.replaceChild(pic, card);
+      return;
+    }
     var text = card.querySelector('.jjr-card-text');
     var allow = text.querySelector('.jjr-card-allow');
     if (allow) allow.parentNode.removeChild(allow);
@@ -1166,8 +1277,10 @@ PttReader.prototype.fillCard = function(card) {
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
       img.src = info.image;
+      var retry = PttReader.imageRetry(img);
       img.addEventListener('error', function() {
-        if (img.parentNode) img.parentNode.removeChild(img);
+        if (img.referrerPolicy === 'no-referrer') retry();
+        else if (img.parentNode) img.parentNode.removeChild(img);
       });
       card.insertBefore(img, card.firstChild);
       card.classList.add('jjr-card-rich');
@@ -1304,6 +1417,44 @@ PttReader.pushSegs = function(content, join, st, prefix) {
   segs.push({ text: part, st: link, tail: !!join.tail });
   if (at + part.length < content.length) segs.push({ text: content.slice(at + part.length), st: st });
   return segs;
+};
+
+// Pushes show the pictures they post. A URL that PTT cut in two also gets
+// its YouTube thumbnail or link card: the URL can't be read on the screen,
+// so the card says where it goes.
+PttReader.pushMedia = function(url, join) {
+  return !!PttReader.imageSrc(url) || PttReader.isImgurAlbum(url) || !!String(url).parseYoutubeUrl() ||
+    PttReader.isShortLink(url) || !!(join && join.first && url === join.url);
+};
+
+// Short links: in a push they get a card only when they lead to a YouTube
+// video (the card is dropped otherwise, see fillCard).
+PttReader.SHORT_HOSTS = /^(?:reurl\.cc|bit\.ly|tinyurl\.com|t\.co|goo\.gl|lihi\d?\.(?:cc|com|me)|pse\.is|is\.gd|shorturl\.at|reurl\.tw)$/i;
+PttReader.isShortLink = function(url) {
+  var m = /^https?:\/\/([^\/?#]+)\/[\w-]+\/?$/i.exec(String(url || ''));
+  return !!(m && PttReader.SHORT_HOSTS.test(m[1].replace(/^www\./i, '')));
+};
+
+// Where a short link's page sends the reader, when it says so in the page:
+// a hidden "target" field (reurl.cc), a meta refresh, or a YouTube link.
+PttReader.pageTarget = function(doc, html) {
+  var t = doc.querySelector('input#target, input[name="target"]');
+  if (t && /^https?:\/\//i.test(t.getAttribute('value') || '')) return t.getAttribute('value');
+  var r = doc.querySelector('meta[http-equiv="refresh" i]');
+  var m = r && /url=['"]?(https?:\/\/[^'"\s]+)/i.exec(r.getAttribute('content') || '');
+  if (m) return m[1];
+  m = /https?:\/\/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?[^"'<\s]*v=|shorts\/|live\/)|youtu\.be\/)[\w-]+[^"'<\s]*/i.exec(html);
+  return m ? m[0].replace(/&amp;/g, '&') : '';
+};
+
+// imgur albums / galleries (imgur.com/a/ID, imgur.com/gallery/title-ID):
+// shown as their first picture, read from the album page (og:image).
+PttReader.isImgurAlbum = function(url) {
+  return /^https?:\/\/(?:m\.)?imgur\.com\/(?:a|gallery)\/[\w-]+\/?(?:[?#].*)?$/i.test(String(url || ''));
+};
+// og:image of an album is a crop for Facebook ("?fb"): the picture itself
+PttReader.albumPicture = function(image) {
+  return String(image || '').replace(/\?fb$/, '');
 };
 
 PttReader.prototype.headerNode = function(article, h) {
@@ -1858,11 +2009,11 @@ PttReader.prototype.renderPushes = function(article) {
     if (level) line.setAttribute('data-jj-level', level);
     wrap.appendChild(line);
     result[i] = { line: line, frag: wrap };
-    // images posted in pushes
+    // images posted in pushes, and whatever a URL cut in two by PTT shows
     content.urls.forEach(function(u) {
       if (blackListed || id in notes) return;  // no thumbnails for blacklisted or custom-list users
-      if (!PttReader.imageSrc(u)) return;
-      var media = self.linkBlock(u, true);
+      if (!PttReader.pushMedia(u, join)) return;
+      var media = self.linkBlock(u, true, true);
       media.className += ' jjt-push-media';
       wrap.appendChild(media);
     });
