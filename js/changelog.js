@@ -3,6 +3,14 @@
 // extension/manifest.json and CHANGELOG.md.
 var JJPTT_CHANGELOG = [
   {
+    version: '1.35.3',
+    date: '2026-11-17',
+    changes: [
+      '修正：畫面上方的「有新版本」提示按 × 關掉後，不會每次開設定或每隔一段時間就又跳出來；同一個版本關掉就不再提示，有更新的版本才會再出現（設定裡的「更新 JJptt」照樣能用）',
+      '「立即更新」如果在 jjptt 資料夾執行了 git pull 卻沒有更新到新版，會直接顯示 git 的回應，不會再像沒反應一樣又跳出「有新版本」'
+    ]
+  },
+  {
     version: '1.35.2',
     date: '2026-11-16',
     changes: [
