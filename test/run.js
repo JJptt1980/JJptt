@@ -295,7 +295,7 @@ test('the exemption runs out after 24 hours', function() {
 console.log('loading articles');
 
 test('every loaded article (read or prefetched) goes through the fact check', function() {
-  var src = PttReader.prototype.fetchArticle.toString();
+  var src = PttReader.prototype.articleFromDoc.toString();
   assert.ok(/factCheck\.analyze\(article\)/.test(src), 'fetchArticle runs the fact check');
   assert.ok(/assignBlocks\(body, pushes\)/.test(src), 'fetchArticle sets push.block');
   assert.ok(/findArticle\(/.test(PttReader.prototype.startPrefetch.toString()), 'prefetch loads through findArticle');
@@ -404,7 +404,7 @@ test('共伴 history: an article under ?_=… is the same article; old copies fo
 });
 test('fetchArticle keeps the article\'s own address (no ?_= cache query)', function() {
   assert.strictEqual(PttReader.articleUrl('https://www.ptt.cc/bbs/G/M.1.A.html?_=123'), 'https://www.ptt.cc/bbs/G/M.1.A.html');
-  assert.ok(/PttReader\.articleUrl\(doc\.jjUrl \|\| url\)/.test(PttReader.prototype.fetchArticle.toString()));
+  assert.ok(/PttReader\.articleUrl\(doc\.jjUrl \|\| url\)/.test(PttReader.prototype.articleFromDoc.toString()));
 });
 
 // ---- automatic blacklist: batch, toast, permanent ---------------------------------
@@ -2236,6 +2236,178 @@ testAsync('BBS article: Enter, every page by Page Down until 100%, back with q',
   assert.strictEqual(lines.length, 9);
   assert.strictEqual(lines[4], '第一行');
   assert.strictEqual(lines[8], '→ bob: 補 11/19 01:03');
+});
+
+testAsync('BBS article already open further down: Home to the first page, then every page', async function() {
+  var P1 = ' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var P2 = '第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行';
+  var f = fakePtt([[P2, { '\x1b[1~': 1 }], [P1, { '\x1b[6~': 2 }], [P2, { '\x1b[1~': 1 }]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var lines = await f.ptt.readPages();
+  assert.deepStrictEqual(f.typed, ['\x1b[1~', '\x1b[6~']);
+  assert.strictEqual(lines[0], ' 作者  tester (測試)    看板  Test');
+  assert.strictEqual(lines[7], '推 alice: 好文 1.2.3.4 11/19 01:02');
+});
+
+testAsync('BBS article: each page is handed over as it comes; false stops the paging', async function() {
+  var P1 = ' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var P2 = '第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行';
+  var f = fakePtt([[P1, { '\x1b[6~': 1 }], [P2, {}]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var seen = [];
+  var lines = await f.ptt.readPages(function(n, total, sofar) { seen.push([n, total, sofar.length]); });
+  assert.deepStrictEqual(seen, [[1, 2, 5], [2, 2, 9]]);
+  assert.ok(!lines.stopped);
+  var g = fakePtt([[P1, { '\x1b[6~': 1 }], [P2, {}]]);
+  g.app.buf.rows = 6;
+  g.app.conn.isConnected = true;
+  lines = await g.ptt.readPages(function() { return false; });
+  assert.ok(lines.stopped);
+  assert.deepStrictEqual(g.typed, [], 'no Page Down after stopping');
+});
+
+testAsync('BBS article: a page still being drawn (status line not moved on yet) is not read as the next one', async function() {
+  var P1 = ' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var HALF = '第一行\n第二行\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var P2 = '第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行';
+  var f = fakePtt([[P1, { '\x1b[6~': 1 }], [HALF, {}, { after: 30, to: 2 }], [P2, {}]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var lines = await f.ptt.readPages();
+  assert.strictEqual(lines[0], ' 作者  tester (測試)    看板  Test', 'page 1 not overwritten by the half-drawn screen');
+  assert.strictEqual(lines[1], ' 標題  [問卦] 測試');
+  assert.strictEqual(lines[7], '推 alice: 好文 1.2.3.4 11/19 01:02');
+});
+
+testAsync('reading ahead on the BBS gives way to what the user opens', async function() {
+  var f = fakePtt([['x', {}]]);
+  f.ptt.user = 'tester';
+  f.ptt.ensureIn = function() { return Promise.resolve(); };
+  f.ptt.toArticle = function() { return Promise.resolve(); };
+  var pages = 0;
+  f.ptt.readHere = function(onPage) {
+    var go = function() {
+      ++pages;
+      if (onPage(pages, 10, []) === false || pages >= 10) return Promise.resolve([]);
+      if (pages === 2) f.ptt.run(function() { return Promise.resolve('fg'); });  // the user opens another
+      return Promise.resolve().then(go);
+    };
+    return go();
+  };
+  await assert.rejects(f.ptt.termArticle('https://www.ptt.cc/bbs/Test/M.1.A.2.html', null, { bg: true }), function(e) { return e.yielded; });
+  assert.strictEqual(pages, 3, 'stopped on the page after the other job came');
+  pages = 0;
+  f.ptt.run(function() { return Promise.resolve(); });
+  var r = await f.ptt.termArticle('https://www.ptt.cc/bbs/Test/M.1.A.2.html', null, {});
+  assert.strictEqual(pages, 10, 'not read ahead: read to the end');
+  assert.ok(r.html);
+});
+
+testAsync('app: an article being read ahead shows its pages when opened; one that gave way is read again', async function() {
+  var calls = [];
+  var m = Object.create(JJMobile.prototype);
+  m.articles = {};
+  m.app = { reader: { fetchArticle: function(url, opts) {
+    calls.push(opts.bg);
+    if (opts.bg) {
+      opts.onPartial({ part: 1 }, 1, 3);
+      var e = new Error('讓給前面的工作'); e.yielded = true;
+      return new Promise(function(res, rej) { setTimeout(function() { rej(e); }, 5); });
+    }
+    opts.onPartial({ part: 2 }, 2, 3);
+    return Promise.resolve({ done: true });
+  } } };
+  m.getArticle('u', null, true).catch(function() {});
+  var seen = [];
+  var a = await m.getArticle('u', function(x, i) { seen.push(i); });
+  assert.deepStrictEqual(a, { done: true });
+  assert.deepStrictEqual(calls, [true, false]);
+  assert.deepStrictEqual(seen, [1, 2], 'the page already read, then the new read');
+});
+
+test('extension reading mode: www.ptt.cc down -> read the article in the terminal (not in the app, not for 404)', function() {
+  var isApp = lib.isApp;
+  try {
+    var r = new PttReader({ conn: {}, buf: { pageState: 3 } });
+    var e500 = new Error('HTTP 500'); e500.webStatus = 500;
+    var e404 = new Error('HTTP 404'); e404.webStatus = 404;
+    lib.isApp = function() { return false; };
+    assert.ok(r.canReadTerminal(e500));
+    assert.ok(r.canReadTerminal(new TypeError('Failed to fetch')));
+    assert.ok(!r.canReadTerminal(e404));
+    r.app.buf.pageState = 2;
+    assert.ok(!r.canReadTerminal(e500), 'only with the article open in the terminal');
+    r.app.buf.pageState = 3;
+    lib.isApp = function() { return true; };
+    assert.ok(!r.canReadTerminal(e500), 'the app reads on its own connection');
+    assert.ok(/canReadTerminal\(e\)/.test(PttReader.prototype.openFor.toString()), 'openFor falls back');
+    assert.ok(/canReadTerminal\(err\)/.test(PttReader.prototype.waitForPush.toString()), 'after a push too');
+  } finally {
+    lib.isApp = isApp;
+  }
+});
+
+testAsync('hidden connection: a number from a filtered list lands elsewhere -> found among the author\'s posts', async function() {
+  var LIST = '【板主:x】  看板《Test》\n>  14295 + 3 11/03 ii49     □ [新聞] 舊的\n';
+  var AFTER = '【板主:x】  看板《Test》\n  14295 + 3 11/03 ii49     □ [新聞] 舊的\n 請輸入欲搜尋的作者:';
+  var FOUND = '【板主:x】  看板《Test》\n     12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n>    13   11/18 Ho1liday  □ [問卦] 別篇\n';
+  var ON = '【板主:x】  看板《Test》\n>    12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n     13   11/18 Ho1liday  □ [問卦] 別篇\n';
+  var f = fakePtt([[LIST, { 'a': 1 }], [AFTER, { 'Ho1liday\r': 2 }], [FOUND, { '12\r': 3 }], [ON, {}]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  await f.ptt.cursorTo(14295, { author: 'Ho1liday', title: '[問卦] 光電水為何在脆上燒起來了?' });
+  assert.deepStrictEqual(f.typed, ['14295\r', 'a', 'Ho1liday\r', '12\r']);
+  assert.ok(JJPtt.sameTitle('Re: [問卦] 光電水為何在脆上燒起', '[問卦] 光電水為何在脆上燒起來了?'), 'cut at the screen edge');
+  assert.ok(!JJPtt.sameTitle('[問卦] 別篇', '[問卦] 光電水為何在脆上燒起來了?'));
+});
+
+testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nearest first; an unfinished one is not waited for', async function() {
+  var isApp = lib.isApp, isExt = lib.isExtension, DP = global.DOMParser;
+  try {
+    lib.isApp = function() { return false; };
+    lib.isExtension = function() { return true; };
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    var r = new PttReader({ conn: {}, pref: { values: { readerPrefetchCount: 2 }, logins: ['tester', 'pw'] } });
+    var read = [];
+    var release = [];
+    r.bg = { termArticle: function(u) { read.push(u); return new Promise(function(res) { release.push(function() { res({ url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', html: '<x>' }); }); }); } };
+    r.articleFromDoc = function(doc, url) { return { url: url, meta: { '時間': '' }, text: '', pushes: [] }; };
+    r.preloadMedia = function() {};
+    var rows = [10, 11, 12, 13, 14].map(function(n) { return { author: 'a' + n, title: 't' + n, num: n }; });
+    var snap = { board: 'Test', rows: rows, index: 2 };
+    assert.ok(!r.bgPlan(snap, 2, 0), 'web up: as usual');
+    PttReader.webDownAt = Date.now();
+    assert.deepStrictEqual(r.bgOrder(snap, 2, 0), [2, 3, 1, 4, 0]);
+    assert.deepStrictEqual(r.bgOrder(snap, 2, -1), [2, 1, 3, 0, 4], 'reading upwards: up first');
+    assert.ok(r.bgPlan(snap, 2, 0));
+    assert.deepStrictEqual(read, ['jjterm:art/Test/12'], 'one at a time, the article itself first');
+    assert.strictEqual(r.takePrefetch({ board: 'Test', author: 'a12', title: 't12', time: '' }), null, 'not finished: not waited for');
+    release.shift()();
+    await new Promise(function(res) { setTimeout(res, 5); });
+    assert.deepStrictEqual(read, ['jjterm:art/Test/12', 'jjterm:art/Test/13']);
+    var got = await r.takePrefetch({ board: 'Test', author: 'a12', title: 't12', time: '' });
+    assert.strictEqual(got.url, 'https://www.ptt.cc/bbs/Test/M.1.A.2.html');
+    // a new plan drops what was waiting (not the one being read)
+    r.bgPlan({ board: 'Test', rows: rows, index: 0 }, 0, 0);
+    assert.ok(!r.prefetch[PttReader.prefetchKey('Test', 'a14', 't14')], 'dropped');
+    r.app.pref.logins = ['tester', ''];
+    assert.strictEqual(r.bgPtt(), null, 'no saved password: no hidden connection');
+  } finally {
+    lib.isApp = isApp;
+    lib.isExtension = isExt;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0;
+  }
+});
+
+test('extension: picture hosts that need a referrer are in the manifest\'s host permissions', function() {
+  var m = JSON.parse(fs.readFileSync(path.join(root, 'extension/manifest.json'), 'utf8'));
+  PttReader.REFERER_HOSTS.forEach(function(h) {
+    assert.ok(m.host_permissions.indexOf('https://' + h + '/*') >= 0, h);
+  });
+  assert.ok(/1802/.test(PttReader.prototype.ensureOver18.toString()), 'the referrer rule');
 });
 
 testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the extension are not', async function() {
