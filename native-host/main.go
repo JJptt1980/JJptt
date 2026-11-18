@@ -35,10 +35,22 @@ import (
 	"time"
 )
 
-const version = "1.1.0"
+const version = "1.1.1"
 
-// The repository the "update" message may pull.
-const repoMarker = "github.com/killnopig/jjptt"
+// The repositories the "update" message may pull. The GitHub account was
+// renamed from killnopig to JJptt1980; clones made before the rename still
+// have the old URL as origin (GitHub redirects it), so both are accepted.
+var repoMarkers = []string{"github.com/jjptt1980/jjptt", "github.com/killnopig/jjptt"}
+
+func isJJpttRemote(url string) bool {
+	url = strings.ToLower(url)
+	for _, m := range repoMarkers {
+		if strings.Contains(url, m) {
+			return true
+		}
+	}
+	return false
+}
 
 var allowedHosts = map[string]bool{"ptt.cc": true, "ptt2.cc": true}
 
@@ -239,7 +251,7 @@ func runUpdate() (string, error) {
 		return "", errors.New("找不到 git")
 	}
 	origin, err := exec.Command(git, "-C", dir, "remote", "get-url", "origin").Output()
-	if err != nil || !strings.Contains(strings.ToLower(string(origin)), repoMarker) {
+	if err != nil || !isJJpttRemote(string(origin)) {
 		return "", errors.New("這個資料夾不是 JJptt 的 GitHub 專案：" + dir)
 	}
 	cmd := exec.Command(git, "-C", dir, "pull", "--ff-only")

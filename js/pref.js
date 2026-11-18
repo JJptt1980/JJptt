@@ -724,7 +724,7 @@ PttChromePref.prototype = {
 
     var kofi = $('#about_kofi').empty();
     kofi.append(document.createTextNode(i18n('about_kofiPre')));
-    $('<a href="https://ko-fi.com/killnopig" target="_blank" rel="noopener noreferrer"></a>').text(i18n('about_kofiLink')).appendTo(kofi);
+    $('<a href="https://ko-fi.com/jjptt1980" target="_blank" rel="noopener noreferrer"></a>').text(i18n('about_kofiLink')).appendTo(kofi);
     kofi.append(document.createTextNode(i18n('about_kofiPost')));
 
     if (typeof JJPTT_PITCH !== 'undefined') {

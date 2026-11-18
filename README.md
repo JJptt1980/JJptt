@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md) | [日本語](README.ja.md)
 
-[![下載 Android App](https://img.shields.io/badge/Android-%E4%B8%8B%E8%BC%89%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/killnopig/JJptt/releases/tag/android-stable) [![Chrome 擴充功能版](https://img.shields.io/badge/Chrome-%E6%93%B4%E5%85%85%E5%8A%9F%E8%83%BD-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-%E8%AB%8B%E6%88%91%E5%96%9D%E6%9D%AF%E5%92%96%E5%95%A1-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/killnopig) [![Facebook 粉絲專頁](https://img.shields.io/badge/Facebook-%E7%B2%89%E7%B5%B2%E5%B0%88%E9%A0%81-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
+[![下載 Android App](https://img.shields.io/badge/Android-%E4%B8%8B%E8%BC%89%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/JJptt1980/JJptt/releases/tag/android-stable) [![Chrome 擴充功能版](https://img.shields.io/badge/Chrome-%E6%93%B4%E5%85%85%E5%8A%9F%E8%83%BD-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-%E8%AB%8B%E6%88%91%E5%96%9D%E6%9D%AF%E5%92%96%E5%95%A1-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jjptt1980) [![Facebook 粉絲專頁](https://img.shields.io/badge/Facebook-%E7%B2%89%E7%B5%B2%E5%B0%88%E9%A0%81-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
 
 **JJptt 是用來看 PTT 的免費工具。** 它讓 PTT 的文章更好讀，也會把「可能有人在帶風向」的跡象標出來給你看。
 

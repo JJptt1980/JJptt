@@ -207,8 +207,8 @@ JJMobile.prototype.start = function() {
 JJMobile.TAG_STABLE = 'android-stable';
 JJMobile.TAG_TEST = 'android-latest';
 JJMobile.BETA_KEY = 'jjptt.m.betaChannel';
-JJMobile.RELEASE_API_BASE = 'https://api.github.com/repos/killnopig/JJptt/releases/tags/';
-JJMobile.RELEASE_DL_BASE = 'https://github.com/killnopig/JJptt/releases/download/';
+JJMobile.RELEASE_API_BASE = 'https://api.github.com/repos/JJptt1980/JJptt/releases/tags/';
+JJMobile.RELEASE_DL_BASE = 'https://github.com/JJptt1980/JJptt/releases/download/';
 JJMobile.RELEASE_API = JJMobile.RELEASE_API_BASE + JJMobile.TAG_TEST;
 
 JJMobile.RELEASE_DL = JJMobile.RELEASE_DL_BASE + JJMobile.TAG_TEST + '/';

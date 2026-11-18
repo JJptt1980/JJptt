@@ -17,8 +17,8 @@ function JJUpdater(app) {
 
 // GitHub API first (raw.githubusercontent.com can serve a copy a few minutes
 // old right after a push), raw file as a fallback.
-JJUpdater.REMOTE_API = 'https://api.github.com/repos/killnopig/JJptt/contents/extension/manifest.json?ref=gh-pages';
-JJUpdater.REMOTE_MANIFEST = 'https://raw.githubusercontent.com/killnopig/JJptt/gh-pages/extension/manifest.json';
+JJUpdater.REMOTE_API = 'https://api.github.com/repos/JJptt1980/JJptt/contents/extension/manifest.json?ref=gh-pages';
+JJUpdater.REMOTE_MANIFEST = 'https://raw.githubusercontent.com/JJptt1980/JJptt/gh-pages/extension/manifest.json';
 JJUpdater.CHECK_EVERY = 30 * 60 * 1000;
 
 JJUpdater.compare = function(a, b) {

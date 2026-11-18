@@ -38,7 +38,7 @@ JJptt 也有 Android App 了：下載就能用，不用另外裝東西。App 自
 
 ## 下載與更新
 
-1. 用手機打開 [JJptt Android 正式版下載頁](https://github.com/killnopig/JJptt/releases/tag/android-stable)，點 `JJptt.apk` 下載（約 10 MB）。APK 就是 Android App 的安裝檔。
+1. 用手機打開 [JJptt Android 正式版下載頁](https://github.com/JJptt1980/JJptt/releases/tag/android-stable)，點 `JJptt.apk` 下載（約 10 MB）。APK 就是 Android App 的安裝檔。
 2. 打開下載的檔案安裝。
    - 第一次會問你要不要允許「安裝不明來源的應用程式」，選允許。
    - 為什麼會問：JJptt 沒有上架 Google Play。從 Google Play 以外的地方裝 App，手機都會先問一次。
@@ -55,6 +55,6 @@ JJptt 也有 Android App 了：下載就能用，不用另外裝東西。App 自
 
 很多人問有沒有 iPhone 版，其實我也很想做。程式大部分可以沿用，但 iOS App 要上架，得先加入 Apple 的開發者計畫（每年 99 美元），也需要一支 iPhone 來測試直連 PTT 和推文這些功能。
 
-JJptt 一直是免費、沒有廣告的業餘專案，這筆費用目前還沒有著落。如果你覺得 JJptt 好用，也願意幫忙促成 iOS 版，歡迎到 [Ko-fi 請我喝杯咖啡](https://ko-fi.com/killnopig)——金額不拘、完全自由，不影響任何功能。湊到開發者帳號的費用我就開工，進度會再跟大家分享。
+JJptt 一直是免費、沒有廣告的業餘專案，這筆費用目前還沒有著落。如果你覺得 JJptt 好用，也願意幫忙促成 iOS 版，歡迎到 [Ko-fi 請我喝杯咖啡](https://ko-fi.com/jjptt1980)——金額不拘、完全自由，不影響任何功能。湊到開發者帳號的費用我就開工，進度會再跟大家分享。
 
 <sub>宣傳圖裡的文章、帳號和 IP 都是示範用的虛構資料。</sub>

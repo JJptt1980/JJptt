@@ -2,7 +2,7 @@
 
 [中文](README.md) | **English** | [日本語](README.ja.md)
 
-[![Get the Android app](https://img.shields.io/badge/Android-Download%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/killnopig/JJptt/releases/tag/android-stable) [![Chrome extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.en.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/killnopig) [![Facebook page](https://img.shields.io/badge/Facebook-Page-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
+[![Get the Android app](https://img.shields.io/badge/Android-Download%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/JJptt1980/JJptt/releases/tag/android-stable) [![Chrome extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.en.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jjptt1980) [![Facebook page](https://img.shields.io/badge/Facebook-Page-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
 
 **JJptt is a free tool for reading PTT.** It makes PTT articles easier to read, and it points out signs that someone may be trying to steer the conversation.
 

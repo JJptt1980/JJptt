@@ -31,7 +31,7 @@
 **步驟 2：下載 JJptt**
 
 ```bash
-cd ~ && git clone https://github.com/killnopig/JJptt.git
+cd ~ && git clone https://github.com/JJptt1980/JJptt.git
 ```
 
 - 如果跳出「需要安裝命令列開發者工具」，按「安裝」，等它裝完再貼一次上面的指令。
@@ -70,7 +70,7 @@ sh ~/JJptt/native-host/install.sh
 按 `Windows 鍵`，輸入 `cmd`，打開「命令提示字元」，貼上下面這行按 Enter：
 
 ```bat
-cd %USERPROFILE% && git clone https://github.com/killnopig/JJptt.git
+cd %USERPROFILE% && git clone https://github.com/JJptt1980/JJptt.git
 ```
 
 完成後，`C:\Users\你的名字\JJptt` 會多一個資料夾。
@@ -83,7 +83,7 @@ cd %USERPROFILE% && git clone https://github.com/killnopig/JJptt.git
 
 ### 方法二：下載壓縮檔
 
-1. 到 [Releases](https://github.com/killnopig/JJptt/releases/latest) 下載兩個檔案：`JJptt-extension-版本.zip` 和 `JJptt-native-host-版本.zip`。
+1. 到 [Releases](https://github.com/JJptt1980/JJptt/releases/latest) 下載兩個檔案：`JJptt-extension-版本.zip` 和 `JJptt-native-host-版本.zip`。
 2. 兩個都解壓縮（Mac 雙擊檔案；Windows 按右鍵 →「解壓縮全部」）。
 3. 安裝本機小程式：
    - Mac：打開「終端機」（見方法一的步驟 1），輸入 `sh `（sh 後面有一個空白），把解壓縮出來的 `native-host` 資料夾裡的 `install.sh` 拖進視窗，按 Enter。

@@ -242,12 +242,12 @@ JJMobile.prototype.renderSettings = function(screen) {
   betaBox.appendChild(beta);
   panes.about.insertBefore(betaBox, ab);
   var cafe = JJMobile.button('jjm-btn jjm-wide jjm-btn-coffee', '☕ 覺得好用？請我喝杯咖啡', function() {
-    if (window.confirm('要打開 Ko-fi 贊助頁面嗎？（自願，不影響任何功能）')) window.open('https://ko-fi.com/killnopig', '_blank');
+    if (window.confirm('要打開 Ko-fi 贊助頁面嗎？（自願，不影響任何功能）')) window.open('https://ko-fi.com/jjptt1980', '_blank');
   });
   panes.about.appendChild(cafe);
   panes.about.appendChild(el('div', 'jjm-hint', '會先問一次再打開 Ko-fi，不會誤按就扣款。'));
   ab.appendChild(this.setRow('原始碼與回報問題', 'GitHub', function() {
-    window.open('https://github.com/killnopig/JJptt', '_blank');
+    window.open('https://github.com/JJptt1980/JJptt', '_blank');
   }));
 };
 
@@ -1005,7 +1005,7 @@ JJMobile.prototype.aboutFact = function(box) {
   }));
   box.appendChild(head);
 };
-JJMobile.FACT_DOC_URL = 'https://github.com/killnopig/JJptt/blob/gh-pages/docs/fact.md';
+JJMobile.FACT_DOC_URL = 'https://github.com/JJptt1980/JJptt/blob/gh-pages/docs/fact.md';
 
 // The fact-check rules, in the order and groups of the extension's settings
 // page: a switch per rule, its numbers under it (greyed out when off).

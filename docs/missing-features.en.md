@@ -46,4 +46,4 @@ So you don't miss what's already there:
 
 ## Want one of these?
 
-Tell us which one the app should do first on [GitHub Issues](https://github.com/killnopig/JJptt/issues).
+Tell us which one the app should do first on [GitHub Issues](https://github.com/JJptt1980/JJptt/issues).

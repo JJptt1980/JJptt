@@ -20,8 +20,8 @@
 - **粉絲專頁名稱**：JJptt
 - **類別**：應用程式頁面（找不到就選「軟體」）
 - **用戶名稱**：jjptt（被用走就 jjptt.app）
-- **網站**：https://github.com/killnopig/JJptt
-- **行動按鈕**：「下載」或「使用應用程式」，連到 https://github.com/killnopig/JJptt/releases/tag/android-stable
+- **網站**：https://github.com/JJptt1980/JJptt
+- **行動按鈕**：「下載」或「使用應用程式」，連到 https://github.com/JJptt1980/JJptt/releases/tag/android-stable
 
 **簡介**（臉書上限 101 字，下面這段 79 字）：
 
@@ -39,9 +39,9 @@ JJptt 是用來看 PTT 的免費工具，有 Android App 和 Chrome 擴充功能
 ✍️ 推文、回文、發文都可以，推完馬上看到自己的推文
 🔒 App 直接連上 PTT，不經過別人的伺服器；密碼存在手機的 Android Keystore，只在你手機裡
 
-Android App：https://github.com/killnopig/JJptt/releases/tag/android-stable
-原始碼與擴充功能版：https://github.com/killnopig/JJptt
-請我喝咖啡：https://ko-fi.com/killnopig
+Android App：https://github.com/JJptt1980/JJptt/releases/tag/android-stable
+原始碼與擴充功能版：https://github.com/JJptt1980/JJptt
+請我喝咖啡：https://ko-fi.com/jjptt1980
 
 本專頁是個人開發的非官方工具，與 PTT 批踢踢實業坊無關。
 ```
@@ -70,11 +70,11 @@ JJptt 是一個看 PTT 的免費工具，Android 手機和電腦（Chrome 擴充
 🆓 免費、開源、沒有廣告
 
 📱 Android App 下載（約 10 MB，Android 7.0 以上）
-https://github.com/killnopig/JJptt/releases/tag/android-stable
+https://github.com/JJptt1980/JJptt/releases/tag/android-stable
 第一次安裝手機會問要不要允許「安裝不明來源的應用程式」，選允許就好（因為沒有上架 Google Play）
 
 💻 電腦版、原始碼
-https://github.com/killnopig/JJptt
+https://github.com/JJptt1980/JJptt
 
 有問題、想要的功能，歡迎在這裡留言或私訊 🙌
 
@@ -97,8 +97,8 @@ https://github.com/killnopig/JJptt
 
 ⚠️ 標出來不代表一定是網軍，只是「值得多看一眼」。每條規則都能在設定裡調門檻或關掉。
 
-規則說明 👉 https://github.com/killnopig/JJptt/blob/gh-pages/docs/fact.md
-App 下載 👉 https://github.com/killnopig/JJptt/releases/tag/android-stable
+規則說明 👉 https://github.com/JJptt1980/JJptt/blob/gh-pages/docs/fact.md
+App 下載 👉 https://github.com/JJptt1980/JJptt/releases/tag/android-stable
 
 #JJptt #PTT #事實查核 #帶風向 #網軍
 ```
@@ -115,7 +115,7 @@ JJptt 也有 Chrome 擴充功能版（Edge、Brave、Arc、Vivaldi 也能用）�
 ✅ 設定可以存成檔案，搬到手機 App 直接用
 
 安裝要照步驟做一次，大約 5 分鐘 👇
-https://github.com/killnopig/JJptt/blob/gh-pages/docs/desktop.md
+https://github.com/JJptt1980/JJptt/blob/gh-pages/docs/desktop.md
 
 #JJptt #PTT #Chrome擴充功能
 ```
@@ -129,7 +129,7 @@ https://github.com/killnopig/JJptt/blob/gh-pages/docs/desktop.md
 
 JJptt 一直是免費、沒有廣告的業餘專案，這筆費用目前還沒有著落。如果你覺得 JJptt 好用、也願意幫忙促成 iOS 版，歡迎到 Ko-fi 請我喝杯咖啡 ☕ 金額不拘，完全自由，不影響任何功能。
 
-https://ko-fi.com/killnopig
+https://ko-fi.com/jjptt1980
 
 謝謝大家 🙏
 
@@ -149,7 +149,7 @@ Q：被標成秒推、同網段就是網軍嗎？
 A：不一定，只是值得多看一眼。每條規則的門檻都能調，也能關掉。
 
 Q：有 iPhone 版嗎？
-A：還沒有，原因在這裡：https://github.com/killnopig/JJptt/blob/gh-pages/docs/android.md#關於-ios-版
+A：還沒有，原因在這裡：https://github.com/JJptt1980/JJptt/blob/gh-pages/docs/android.md#關於-ios-版
 
 Q：怎麼更新？
 A：App 裡 設定 → 關於 →「檢查並自動更新」，設定和登入都會保留。
