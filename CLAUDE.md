@@ -60,4 +60,4 @@ Release APKs are signed by `mobile/android/sign-release.sh` with APK Signature S
 
 ## Project commands
 
-`.claude/commands/`: `/beta` (test build), `/stable` (promote to 正式版, asks first), `/status`, `/check` (lint, tests, build, doc links), `/emu` (debug app on the emulator; CDP helper in `.claude/tools/cdp.mjs`), `/ext-release` (extension version), `/promo` (promo copy). The owner says 「發測試」 for `/beta` and 「發正式」 for `/stable`.
+`.claude/commands/`: `/beta` (test build), `/stable` (promote to 正式版, asks first), `/status`, `/check` (lint, tests, build, doc links), `/emu` (debug app on the emulator; CDP helper in `.claude/tools/cdp.mjs`), `/ext-release` (extension version), `/promo` (promo copy), `/fb` (post on the JJptt FB page with a newly drawn GB子 image, optionally scheduled; drawing script `.claude/fb/panels.js`). The owner says 「發測試」 for `/beta` and 「發正式」 for `/stable`.
