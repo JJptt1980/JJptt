@@ -2,7 +2,7 @@
 
 [中文](README.md) | **English** | [日本語](README.ja.md)
 
-[![Get the Android app](https://img.shields.io/badge/Android-Download%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/killnopig/JJptt/releases/tag/android-stable) [![Chrome extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.en.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/killnopig)
+[![Get the Android app](https://img.shields.io/badge/Android-Download%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/killnopig/JJptt/releases/tag/android-stable) [![Chrome extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.en.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/killnopig) [![Facebook page](https://img.shields.io/badge/Facebook-Page-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
 
 **JJptt is a free tool for reading PTT.** It makes PTT articles easier to read, and it points out signs that someone may be trying to steer the conversation.
 
@@ -38,6 +38,7 @@ flowchart LR
 4. **A new phone, a new computer, or you want a backup**: [Moving your settings](docs/settings-file.en.md).
 5. **Can't find mail, editing your article or other PTT features in the app**: [PTT features JJptt doesn't do yet](docs/missing-features.en.md), each with what to do instead.
 6. **What changed lately**: [Changelog](CHANGELOG.md) (in Chinese).
+7. **Get news of new versions and feature tips**: follow [JJptt on Facebook](https://www.facebook.com/profile.php?id=61596622202223) (in Chinese); every stable release is announced there.
 
 ## Who is steering the thread? JJptt shows you at a glance.
 
