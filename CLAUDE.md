@@ -39,6 +39,8 @@ Both native pieces only allow `ptt.cc` / `ptt2.cc` and fixed ports. `lib.isApp()
 - `fact_check.js` — 真.事實查核 FACT: per-article rules (秒推, 脈衝, 罐頭, 同網段, 機房 via `data/hosting-v4.bin`, 連推…) plus cross-article history (`FactHistory`, 共伴 / 首殺班底) in localStorage
 - `spam_guard.js` — same URL in >3 articles in 24h → temporary blacklist
 
+The lookup tables are generated, not hand-edited: `data/geoip-v4.bin` by `tools/build-geoip.js` (ip-location-db country CSV) and `data/hosting-v4.bin` by `tools/build-hosting.js` (ip-location-db origin-asn); each script's header says where to get the input.
+
 Every FACT rule needs a setting in `index.html`, a `DEFAULT_PREFS` entry, and `options_<key>` in both `zh_TW_messages.js` and `en_US_messages.js`; a test checks this.
 
 **Android app UI** (`js/mobile*.js`, `JJMobile`, only when `lib.isApp()`): a phone UI built on top of `PttReader`, not the terminal. `mobile.js` (start, top bar, icons `JJMobile.ICONS`, updates), `mobile_home.js` (account, boards), `mobile_board.js` (article list), `mobile_article.js` (article, pushes, composer, swipe), `mobile_settings.js` (設定 / 版面). `mobile_ptt.js` (`JJPtt`) drives a hidden terminal session to log in, push, reply and post — it waits on screen text with `wait(cases, ms, since)`; pass `since` (a screen taken before typing) so text already on screen (e.g. a list header's 「[s]選擇看板」) is not taken as PTT's answer. Mobile CSS is the `JJptt on phones` section at the end of `css/main.css`, using tokens on `body.jj-mobile` (`--accent`, `--r-*`, `--f-*`).
@@ -57,6 +59,8 @@ Release APKs are signed by `mobile/android/sign-release.sh` with APK Signature S
 ## Docs
 
 `README.md` / `.en.md` / `.ja.md` are short front pages; details live in `docs/desktop*.md` and `docs/android*.md`. The README keeps `<a name>` anchors for the old section links. Promo images in `docs/images/android-*.png` (zh / en / ja) are rendered from screenshots of a made-up demo article — use fictional accounts, not real PTT users, in anything published.
+
+`landing/` is a standalone promo page (plain HTML/CSS/JS, no CDN or tracking) served by GitHub Pages at `/JJptt/landing/`. It is not part of the grunt build and shares nothing with `js/` except the icons it links from the repo root.
 
 ## Project commands
 
