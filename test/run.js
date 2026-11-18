@@ -404,7 +404,7 @@ test('共伴 history: an article under ?_=… is the same article; old copies fo
 });
 test('fetchArticle keeps the article\'s own address (no ?_= cache query)', function() {
   assert.strictEqual(PttReader.articleUrl('https://www.ptt.cc/bbs/G/M.1.A.html?_=123'), 'https://www.ptt.cc/bbs/G/M.1.A.html');
-  assert.ok(/PttReader\.articleUrl\(url\)/.test(PttReader.prototype.fetchArticle.toString()));
+  assert.ok(/PttReader\.articleUrl\(doc\.jjUrl \|\| url\)/.test(PttReader.prototype.fetchArticle.toString()));
 });
 
 // ---- automatic blacklist: batch, toast, permanent ---------------------------------
@@ -2171,6 +2171,111 @@ test('↓ held past the last article: the ↑ back is retried and the list is ne
   } finally {
     console.log = log;
     global.setTimeout = realSetTimeout;
+  }
+});
+
+// ---- Android app: reading on the BBS when www.ptt.cc is down ----------------------
+
+test('BBS list rows: number, 推文數, date, author, title (Re/Fw), deleted, 置底', function() {
+  var r = JJPtt.parseArticleRow('  12345 +10 11/19 someone      □ [問卦] 測試標題');
+  assert.strictEqual(JJPtt.parseArticleRow(' 780705 + 3 11/12 user     □ [問卦] title').nrec, '3');
+  assert.deepStrictEqual(r, { num: 12345, nrec: '10', date: '11/19', author: 'someone', title: '[問卦] 測試標題', deleted: false });
+  r = JJPtt.parseArticleRow('>12346  爆 1/05 other        R:[新聞] 回文');
+  assert.strictEqual(r.num, 12346); assert.strictEqual(r.nrec, '爆'); assert.strictEqual(r.date, '1/05');
+  assert.strictEqual(r.title, 'Re: [新聞] 回文');
+  r = JJPtt.parseArticleRow('  12347  X111/19 third        轉 [轉錄] 轉的');
+  assert.strictEqual(r.nrec, 'X1'); assert.strictEqual(r.title, 'Fw: [轉錄] 轉的');
+  r = JJPtt.parseArticleRow('  12348 ~    11/19 -            □ (本文已被刪除) [someone]');
+  assert.ok(r.deleted);
+  r = JJPtt.parseArticleRow('   ★    11/12 mod      □ [公告] 板規');
+  assert.strictEqual(r.num, 0);
+  assert.strictEqual(JJPtt.parseArticleRow('【板主:abc】   看板《Test》'), null);
+});
+
+test('BBS article lines -> a page like www.ptt.cc\'s (header, body with links, pushes)', function() {
+  var html = JJPtt.articleHtml([
+    ' 作者  tester (測試)                                  看板  Test',
+    ' 標題  [問卦] 測試',
+    ' 時間  Thu Nov 19 01:00:00 2026',
+    '───────────────────────────────────────',
+    '內文 <b> https://i.imgur.com/abcdefg.jpg',
+    '推 alice: 好文 https://x.y/z  1.2.3.4 11/19 01:02',
+    '→ bob: 補                           11/19 01:03'
+  ]);
+  assert.ok(html.indexOf('<span class="article-meta-tag">作者</span><span class="article-meta-value">tester (測試)</span>') >= 0);
+  assert.ok(html.indexOf('<span class="article-meta-tag">看板</span><span class="article-meta-value">Test</span>') >= 0);
+  assert.ok(html.indexOf('<span class="article-meta-value">[問卦] 測試</span>') >= 0);
+  assert.ok(html.indexOf('內文 &lt;b&gt; <a href="https://i.imgur.com/abcdefg.jpg">') >= 0, 'escaped, links kept');
+  assert.ok(html.indexOf('───') < 0, 'the line under the header is not in the body');
+  assert.ok(html.indexOf('<span class="push-tag">推 </span><span class="push-userid">alice</span><span class="push-content">: 好文 <a href="https://x.y/z">https://x.y/z</a></span><span class="push-ipdatetime"> 1.2.3.4 11/19 01:02') >= 0);
+  assert.ok(html.indexOf('<span class="push-userid">bob</span><span class="push-content">: 補</span><span class="push-ipdatetime"> 11/19 01:03') >= 0);
+});
+
+test('BBS board page -> index HTML with jjterm: links, older page below the lowest number', function() {
+  var html = JJPtt.indexHtml('Test', [{ num: 5, nrec: '', date: '11/19', author: 'a', title: 't5' },
+                                      { num: 6, nrec: '', date: '11/19', author: '-', title: '(本文已被刪除)', deleted: true }], 'jjterm:list/Test/5');
+  assert.ok(html.indexOf('<a href="jjterm:art/Test/5">t5</a>') >= 0);
+  assert.ok(html.indexOf('jjterm:art/Test/6') < 0, 'a deleted article has no link');
+  assert.ok(html.indexOf('href="jjterm:list/Test/5">‹ 上頁') >= 0);
+  assert.strictEqual(JJMobile.webUrl('jjterm:art/Test/5'), 'jjterm:art/Test/5');
+  assert.strictEqual(JJMobile.webUrl('/bbs/Test/index.html'), 'https://www.ptt.cc/bbs/Test/index.html');
+});
+
+testAsync('BBS article: Enter, every page by Page Down until 100%, back with q', async function() {
+  var LIST = '【板主:x】  看板《Test》\n>  5 + 1 11/19 tester  □ [問卦] 測試\n\n\n\n';
+  var f = fakePtt([
+    [LIST, { '\r': 1 }],
+    [' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行', { '\x1b[6~': 2 }],
+    ['第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行', { 'q': 3 }],
+    [LIST, {}]
+  ]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var lines = await f.ptt.readHere();
+  assert.deepStrictEqual(f.typed, ['\r', '\x1b[6~', 'q']);
+  assert.strictEqual(lines.length, 9);
+  assert.strictEqual(lines[4], '第一行');
+  assert.strictEqual(lines[8], '→ bob: 補 11/19 01:03');
+});
+
+testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the extension are not', async function() {
+  var isApp = lib.isApp;
+  var DP = global.DOMParser;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    var calls = [];
+    var ptt = { user: 'tester',
+      boardPage: function(b, before) { calls.push(['list', b, before]); return Promise.resolve('<list>'); },
+      termArticle: function(u) { calls.push(['art', u]); return Promise.resolve({ url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', html: '<art>' }); } };
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    var status = 500;
+    r.webDoc = function() { var e = new Error('HTTP ' + status); e.webStatus = status; return Promise.reject(e); };
+    lib.isApp = function() { return true; };
+    var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm);
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 0]);
+    assert.ok(PttReader.webRecentlyDown());
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html?_=123');
+    assert.deepStrictEqual(calls.pop(), ['art', 'https://www.ptt.cc/bbs/Test/M.1.A.2.html'], 'without the cache query');
+    assert.strictEqual(doc.jjUrl, 'https://www.ptt.cc/bbs/Test/M.1.A.2.html');
+    await r.fetchDoc('jjterm:list/Test/120');
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 120]);
+    await r.fetchDoc('jjterm:art/Test/7');
+    assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7']);
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/search?q=abc'), /網頁版現在故障.*暫時不能用/);
+    ptt.user = '';
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /登入 PTT 帳號後/);
+    ptt.user = 'tester';
+    status = 404;
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /HTTP 404/);
+    status = 500;
+    lib.isApp = function() { return false; };
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /HTTP 500/, 'the extension stays in the terminal as before');
+    assert.strictEqual(calls.length, 0);
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0;
   }
 });
 
