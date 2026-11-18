@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 (async () => {
   const browser = await chromium.launch();
-  const jobs = [['cover.html', 'fb-cover.png', 1640, 624], ['avatar.html', 'fb-avatar.png', 1200, 1200]];
+  const jobs = [['cover.html', 'fb-cover.png', 1640, 624], ['avatar.html', 'fb-avatar.png', 1200, 1200], ['metapulse.html', 'post-metapulse.png', 1080, 1350]];
   for (const [src, out, width, height] of jobs) {
     const page = await browser.newPage({ viewport: { width, height } });
     await page.goto('file://' + path.join(__dirname, src));

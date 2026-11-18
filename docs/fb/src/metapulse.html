@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- Source of docs/fb/post-metapulse.png (1080×1350): the JJptt Game Boy plugs MetaPulse.
+     Render: node docs/fb/src/render.js -->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "NotoTC"; font-weight: 500; src: url(fonts/noto-sans-tc-chinese-traditional-500-normal.woff2); }
+  @font-face { font-family: "NotoTC"; font-weight: 900; src: url(fonts/noto-sans-tc-chinese-traditional-900-normal.woff2); }
+  @font-face { font-family: "NotoLat"; font-weight: 500; src: url(fonts/noto-sans-tc-latin-500-normal.woff2); }
+  @font-face { font-family: "NotoLat"; font-weight: 900; src: url(fonts/noto-sans-tc-latin-900-normal.woff2); }
+  :root { --bg: #151a14; --green: #9ad25a; --lcd: #c9e08a; --text: #f2f2ee; --dim: #a7ad9f; --pink: #c8285a; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; overflow: hidden; }
+  body { position: relative; background: radial-gradient(ellipse 80% 55% at 30% 20%, #26321e 0%, var(--bg) 70%), var(--bg);
+         font-family: "NotoLat", "NotoTC", "WenQuanYi Zen Hei", sans-serif; color: var(--text); }
+  .grid { position: absolute; inset: 0; opacity: .06;
+          background-image: linear-gradient(#9ad25a 1px, transparent 1px), linear-gradient(90deg, #9ad25a 1px, transparent 1px);
+          background-size: 36px 36px; }
+  .gb { position: absolute; left: 60px; top: 70px; width: 420px; height: 420px; image-rendering: pixelated; transform: rotate(-8deg);
+        filter: drop-shadow(10px 14px 0 rgba(0,0,0,.45)); }
+  .bubble { position: absolute; left: 500px; top: 110px; width: 520px; background: var(--lcd); color: #1d2a10; padding: 30px 34px;
+            font-weight: 900; font-size: 46px; line-height: 1.3;
+            box-shadow: 0 0 0 6px #1d2a10, 10px 12px 0 6px rgba(0,0,0,.45); }
+  .bubble small { display: block; margin-top: 10px; font-size: 26px; font-weight: 500; color: #3c5121; }
+  .bubble::before { content: ""; position: absolute; left: -46px; top: 120px; width: 0; height: 0;
+                    border-top: 26px solid transparent; border-bottom: 26px solid transparent; border-right: 46px solid #1d2a10; }
+  .bubble::after { content: ""; position: absolute; left: -32px; top: 128px; width: 0; height: 0;
+                   border-top: 18px solid transparent; border-bottom: 18px solid transparent; border-right: 34px solid var(--lcd); }
+  .main { position: absolute; left: 80px; right: 80px; top: 500px; }
+  .name { font-weight: 900; font-size: 104px; line-height: 1; letter-spacing: .01em; }
+  .name em { font-style: normal; color: var(--green); }
+  .pulse { display: block; margin: 18px 0 0; }
+  .tag { margin-top: 18px; font-weight: 900; font-size: 50px; line-height: 1.3; }
+  .desc { margin-top: 14px; font-weight: 500; font-size: 30px; line-height: 1.55; color: var(--dim); }
+  .feats { margin-top: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .feat { background: rgba(154,210,90,.10); border: 2px solid rgba(154,210,90,.35); border-radius: 18px; padding: 18px 22px; }
+  .feat b { display: block; font-weight: 900; font-size: 32px; color: var(--text); }
+  .feat span { display: block; margin-top: 6px; font-weight: 500; font-size: 23px; line-height: 1.4; color: var(--dim); }
+  .foot { position: absolute; left: 80px; right: 80px; bottom: 56px; }
+  .pill { display: inline-block; background: var(--green); color: #14200c; font-weight: 900; font-size: 30px; padding: 10px 26px; border-radius: 999px; }
+  .note { margin-top: 18px; font-weight: 500; font-size: 19px; color: #7f867a; }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<img class="gb" src="../../../extension/icon_512.png">
+<div class="bubble">幫朋友工商一下！<small>JJptt 作者的另一個小工具 👇</small></div>
+<div class="main">
+  <div class="name">Meta<em>Pulse</em></div>
+  <svg class="pulse" width="920" height="40" viewBox="0 0 920 40"><polyline fill="none" stroke="#9ad25a" stroke-width="6" stroke-linejoin="miter"
+    points="0,20 330,20 360,20 380,4 400,36 420,8 440,20 920,20" shape-rendering="crispEdges"/></svg>
+  <div class="tag">你不需要每天重新開始。</div>
+  <div class="desc">飲食、斷食時間、身體數據放在同一個地方。<br>每天記一點，慢慢看懂自己的節奏。</div>
+  <div class="feats">
+    <div class="feat"><b>📸 飲食點數</b><span>拍照或打字記一餐，用一週額度來看</span></div>
+    <div class="feat"><b>⏱ 斷食計時</b><span>自由安排或 16:8、18:6，有窗口提醒</span></div>
+    <div class="feat"><b>📈 身體記錄</b><span>體重、體組成、血壓，看 7 天平均</span></div>
+    <div class="feat"><b>🔒 資料在你手機</b><span>不用註冊、沒有伺服器</span></div>
+  </div>
+</div>
+<div class="foot">
+  <span class="pill">免費・無廣告・網頁版 ＋ Android</span>
+  <div class="note">個人記錄工具，非醫療器材；點數與熱量均為估算。</div>
+</div>
+</body>
+</html>
