@@ -949,17 +949,22 @@ JJPtt.isTermUrl = function(url) {
 };
 
 // One row of a board's article list:
-// "  12345 + 10 11/19 someone      □ [問卦] title" ->
+// "  12345 + 311/19 someone      □ [問卦] title" ->
 // { num, nrec, date, author, title, deleted }; 置底 (★) rows give num 0.
+// PTT's columns have fixed widths (pttbbs bbs_coldefs): number 6, then
+// " " + mark + 推文數 in exactly 2 columns (" 3", "10", 爆, XX, X1, --),
+// then the date with no space before it -- "+ 311/19" is 3 pushes on
+// 11/19, not 31 on 1/19.
 JJPtt.parseArticleRow = function(row) {
-  var m = /^[>●\s]?\s*(\d+|★)\s([+mMsSD*!=~ ])\s?(爆|X[X\d]|\d{1,2})?\s*(\d{1,2}\/\d{2}) (\S+) +(□|轉|R:?)\s?(.*)$/.exec(String(row || ''));
+  var m = /^[>●\s]?\s*(\d+|★)\s([+mMsSD*!=~ ])(爆|XX|X\d|\d\d| \d|--|  )?\s*(\d{1,2}\/\d{2}) (\S+) +(□|轉|R:?)\s?(.*)$/.exec(String(row || ''));
   if (!m) return null;
   var title = m[7].replace(/\s+$/, '');
   if (m[6] === '轉') title = 'Fw: ' + title;
   else if (m[6] !== '□') title = 'Re: ' + title;
+  var nrec = (m[3] || '').trim();
   return {
     num: m[1] === '★' ? 0 : +m[1],
-    nrec: m[3] || '',
+    nrec: nrec === '--' ? '' : nrec,
     date: m[4],
     author: m[5] === '-' ? '-' : m[5],
     title: title,

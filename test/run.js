@@ -2192,6 +2192,25 @@ test('BBS list rows: number, 推文數, date, author, title (Re/Fw), deleted, �
   assert.strictEqual(JJPtt.parseArticleRow('【板主:abc】   看板《Test》'), null);
 });
 
+test('BBS list rows as PTT draws them: 推文數 runs into the date (fixed columns)', function() {
+  // pttbbs: "%6d", " " + mark + 2-column 推文數, then "%-6.5s" date
+  var p = JJPtt.parseArticleRow;
+  var r = p('  12345 + 311/19 someone      □ [問卦] 三推');
+  assert.strictEqual(r.nrec, '3'); assert.strictEqual(r.date, '11/19'); assert.strictEqual(r.num, 12345);
+  r = p('  12345 + 9 1/05 someone      □ [問卦] 九推');
+  assert.strictEqual(r.nrec, '9'); assert.strictEqual(r.date, '1/05');
+  r = p('  12346 +4211/19 someone      R:[問卦] 四十二推');
+  assert.strictEqual(r.nrec, '42'); assert.strictEqual(r.date, '11/19'); assert.strictEqual(r.title, 'Re: [問卦] 四十二推');
+  r = p('●780705  爆11/19 someone      □ [新聞] 爆');
+  assert.strictEqual(r.num, 780705); assert.strictEqual(r.nrec, '爆'); assert.strictEqual(r.date, '11/19');
+  r = p('  12347  XX11/19 someone      □ [問卦] 噓爆');
+  assert.strictEqual(r.nrec, 'XX');
+  r = p('  12348 +  11/19 someone      □ [問卦] 沒人推');
+  assert.strictEqual(r.nrec, ''); assert.strictEqual(r.date, '11/19');
+  r = p('  12349 !--11/19 someone      □ [問卦] 鎖文');
+  assert.strictEqual(r.nrec, ''); assert.strictEqual(r.date, '11/19');
+});
+
 test('BBS article lines -> a page like www.ptt.cc\'s (header, body with links, pushes)', function() {
   var html = JJPtt.articleHtml([
     ' 作者  tester (測試)                                  看板  Test',
