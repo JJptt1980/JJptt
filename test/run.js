@@ -2496,6 +2496,36 @@ test('app: www.ptt.cc down is kept over a restart; other kinds down -> a shorter
   }
 });
 
+testAsync('app: reading ahead skips 置底 and starts while the app is still logging in (www.ptt.cc down)', async function() {
+  var isApp = lib.isApp;
+  try {
+    lib.isApp = function() { return true; };
+    var m = Object.create(JJMobile.prototype);
+    var read = [];
+    m.getArticle = function(url) { read.push(url); return Promise.resolve({}); };
+    var ptt = { user: '', loggingIn: Promise.resolve() };
+    m.app = { pref: { values: { readerPrefetchCount: 3 } },
+              reader: { termSource: function() { return ptt; }, preloadMedia: function() {} } };
+    var screen = { entries: [{ url: 'jjterm:art/Gossiping/0#a/p1', pinned: true }, { url: 'jjterm:art/Gossiping/0#a/p2', pinned: true },
+                             { url: 'jjterm:art/Gossiping/9#a/t9' }, { url: '' }, { url: 'jjterm:art/Gossiping/8#a/t8' },
+                             { url: 'jjterm:art/Gossiping/7#a/t7' }, { url: 'jjterm:art/Gossiping/6#a/t6' }] };
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Gossiping/M.1.A.2.html');
+    m.prefetchList(screen, 0);
+    for (var i = 0; i < 10; ++i) await Promise.resolve();
+    assert.deepStrictEqual(read, ['jjterm:art/Gossiping/9#a/t9', 'jjterm:art/Gossiping/8#a/t8', 'jjterm:art/Gossiping/7#a/t7'],
+      'the newest first, no 置底, while logging in');
+    read = [];
+    ptt.loggingIn = null;
+    m.prefetchList(screen, 0);
+    for (i = 0; i < 10; ++i) await Promise.resolve();
+    assert.deepStrictEqual(read, [], 'not logged in and not logging in: nothing on the BBS');
+  } finally {
+    lib.isApp = isApp;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
 testAsync('extension: a copy read ahead on the hidden connection a while ago is marked stale', async function() {
   var r = new PttReader({ conn: {} });
   var a = { url: 'u', meta: { '時間': '' }, pushes: [] };
@@ -2544,6 +2574,36 @@ testAsync('hidden connection: a number from a filtered list lands elsewhere -> f
   assert.deepStrictEqual(f.typed, ['14295\r', 'a', 'Ho1liday\r', '12\r']);
   assert.ok(JJPtt.sameTitle('Re: [問卦] 光電水為何在脆上燒起', '[問卦] 光電水為何在脆上燒起來了?'), 'cut at the screen edge');
   assert.ok(!JJPtt.sameTitle('[問卦] 別篇', '[問卦] 光電水為何在脆上燒起來了?'));
+});
+
+testAsync('BBS list: PTT opens another article than the row -> not shown, found among the author\'s posts', async function() {
+  var mk = function(author, title) {
+    return [' 作者  ' + author + ' (暱稱)                                   看板  Gossiping', ' 標題  ' + title, ' 時間  Thu Nov 19 08:39:00 2026', '', '內文'];
+  };
+  var WRONG = mk('Taiwan007', '[新聞]普發2萬藍力拚20日三讀　賴清德點3疑慮');
+  var RIGHT = mk('I26921216', '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤');
+  var want = { author: 'I26921216', title: '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤' };
+  var setup = function(reads) {
+    var p = Object.create(JJPtt.prototype), calls = [];
+    p.run = function(f) { return Promise.resolve().then(f); };
+    p.ensureIn = p.toList = p.wait = p.settle = function() { return Promise.resolve(); };
+    p.send = function() {};
+    p.screen = function() { return '文章網址: https://www.ptt.cc/bbs/Gossiping/M.1.A.2.html'; };
+    p.cursorTo = function(n, w, byAuthor) { calls.push([n, w && w.author, !!byAuthor]); return Promise.resolve(); };
+    p.readHere = function(onPage) { var l = reads.shift(); onPage(1, 1, l); return Promise.resolve(l); };
+    return { p: p, calls: calls };
+  };
+  var f = setup([WRONG, RIGHT]), drawn = [];
+  var r = await f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, { onPage: function(i, n, l) { drawn.push(l[1]); } });
+  assert.deepStrictEqual(f.calls, [[3, 'I26921216', false], [3, 'I26921216', true]], 'again among the author\'s posts');
+  assert.deepStrictEqual(drawn, [RIGHT[1]], 'the wrong one never drawn');
+  assert.ok(r.html.indexOf('雷門大燈籠') >= 0 && r.html.indexOf('普發') < 0);
+  f = setup([WRONG, WRONG]);
+  await assert.rejects(f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, {}), /開到別篇/);
+  f = setup([RIGHT]);
+  r = await f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, {});
+  assert.deepStrictEqual(f.calls, [[3, 'I26921216', false]], 'the right one: once');
+  assert.ok(JJPtt.linesAre(mk('i26921216', 'Re: [新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤'), { author: 'I26921216', title: 'Re: [新聞] 女子打卡竟拉扯「雷門大燈籠」' }));
 });
 
 testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nearest first; an unfinished one is not waited for', async function() {
