@@ -2568,8 +2568,9 @@ test('extension reading mode: www.ptt.cc down -> read the article in the termina
 testAsync('hidden connection: a number from a filtered list lands elsewhere -> found among the author\'s posts', async function() {
   var LIST = '【板主:x】  看板《Test》\n>  14295 + 3 11/03 ii49     □ [新聞] 舊的\n';
   var AFTER = '【板主:x】  看板《Test》\n  14295 + 3 11/03 ii49     □ [新聞] 舊的\n 請輸入欲搜尋的作者:';
-  var FOUND = '【板主:x】  看板《Test》\n     12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n>    13   11/18 Ho1liday  □ [問卦] 別篇\n';
-  var ON = '【板主:x】  看板《Test》\n>    12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n     13   11/18 Ho1liday  □ [問卦] 別篇\n';
+  // the search done: its footer back at the bottom (系列文章)
+  var FOUND = '【板主:x】  系列《Test》\n     12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n>    13   11/18 Ho1liday  □ [問卦] 別篇\n 系列文章  (y)回應';
+  var ON = '【板主:x】  系列《Test》\n>    12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n     13   11/18 Ho1liday  □ [問卦] 別篇\n 系列文章  (y)回應';
   var f = fakePtt([[LIST, { 'a': 1 }], [AFTER, { 'Ho1liday\r': 2 }], [FOUND, { '12\r': 3 }], [ON, {}]]);
   f.app.buf.rows = 6;
   f.app.conn.isConnected = true;
@@ -2637,6 +2638,77 @@ testAsync('BBS: the AID landing on another article (the list still in a search) 
   await assert.rejects(f.p.toArticle(WANT), /跳到別篇/);
   assert.ok(JJPtt.sameArticle('http://www.ptt.cc/bbs/Gossiping/M.1.A.ABC.html', 'https://www.ptt.cc/bbs/Gossiping/M.1.A.abc.html?_=1'));
   assert.ok(!JJPtt.sameArticle('', ''));
+});
+
+testAsync('BBS list: the footer tells a search (系列文章) from the whole list (文章列表), whatever listQuery says', async function() {
+  var HEAD = '【板主:x】  看板《Gossiping》\n   編號    日 期 作  者       文  章  標  題\n>779951  1111/19 end56        □ [問卦] 把228\n';
+  var SEARCH = HEAD + ' 系列文章  (^P)發表 (y)回應 (X)推文 (d)刪除 (→)閱讀 (b)進板  (←)離開';
+  var WHOLE = HEAD + ' 文章列表  (^P)發表 (y)回應 (X)推文 (d)刪除 (→)閱讀 (b)進板  (←)離開 (h)說明';
+  var p = Object.create(JJPtt.prototype), sent = [], now = SEARCH;
+  p.app = {};
+  p.screen = function() { return now; };
+  p.settle = function() { return Promise.resolve(true); };
+  p.send = function(k) { sent.push(k); if (k === '\x1b[D') now = WHOLE; };
+  p.listQuery = '';  // out of date: a job stopped half way
+  assert.strictEqual(p.listFoot(), 'search');
+  assert.ok(p.inList('Gossiping'), 'the current footers count as the list');
+  await p.toBoard('Gossiping');
+  assert.deepStrictEqual(sent, ['\x1b[D'], 'out of the search first (s would keep it)');
+  sent.length = 0;
+  await p.toBoard('Gossiping');
+  assert.deepStrictEqual(sent, [], 'the whole list: nothing to do');
+  p.listQuery = 'recommend:100';
+  assert.strictEqual(p.listFoot(), 'list');
+  var asked = [];
+  p.toBoard = function() { asked.push('toBoard'); return Promise.reject(new Error('stop')); };
+  await assert.rejects(p.toList('Gossiping', 'recommend:100'), /stop/);
+  assert.deepStrictEqual(asked, ['toBoard'], 'listQuery says searched, the footer says the whole list: searched again');
+});
+
+testAsync('app: a list read on the BBS (jjterm: links) is read ahead though articles were never marked down', async function() {
+  var isApp = lib.isApp;
+  try {
+    lib.isApp = function() { return true; };
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    var m = Object.create(JJMobile.prototype), read = [];
+    m.getArticle = function(url) { read.push(url); return Promise.resolve({}); };
+    m.app = { pref: { values: { readerPrefetchCount: 2 } },
+              reader: { termSource: function() { return { user: 'u' }; }, preloadMedia: function() {} } };
+    m.prefetchList({ entries: [{ url: 'jjterm:art/G/9#a/t9' }, { url: 'jjterm:art/G/8#a/t8' }, { url: 'jjterm:art/G/7#a/t7' }] }, 0);
+    for (var i = 0; i < 10; ++i) await Promise.resolve();
+    assert.deepStrictEqual(read, ['jjterm:art/G/9#a/t9', 'jjterm:art/G/8#a/t8'], 'as many as the setting');
+  } finally {
+    lib.isApp = isApp;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+testAsync('BBS search: done when the list\'s footer is back, not at the echo of the words typed', async function() {
+  var ASK = '【板主:x】  看板《Test》\n 1 a\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: ';
+  var ECHO = ASK + '10';
+  var DONE = '【板主:x】  系列《Test》\n 1 a\n 系列文章  (y)回應';
+  var p = Object.create(JJPtt.prototype), now = ECHO, t0 = Date.now();
+  p.app = { conn: { isConnected: true } };
+  p.connected = function() { return true; };
+  p.screen = function() { return now; };
+  p.quiet = function() { return Promise.resolve(); };
+  setTimeout(function() { now = DONE; }, 120);  // PTT searching a moment after the echo
+  await p.searched(ASK);
+  assert.ok(Date.now() - t0 >= 100, 'waited past the echo for the search');
+  now = ECHO;
+  setTimeout(function() { now = ASK.replace(/搜尋.*$/, '◆ 找不到符合條件的文章。'); }, 30);
+  await p.searched(ASK);  // nothing found: done too (toList reports it)
+});
+
+testAsync('BBS: keys that may leave the screen as it is (End at the newest) wait for PTT\'s redraw (Ctrl-L), not 2 s', async function() {
+  var p = Object.create(JJPtt.prototype), sent = [];
+  p.app = { lastDataAt: 0 };
+  p.connected = function() { return true; };
+  p.send = function(k) { sent.push(k); setTimeout(function() { p.app.lastDataAt = Date.now(); }, 20); };
+  var t0 = Date.now();
+  await p.sendSync('\x1b[4~', 2000);
+  assert.deepStrictEqual(sent, ['\x1b[4~\x0c']);
+  assert.ok(Date.now() - t0 < 1000, 'answered: ' + (Date.now() - t0) + ' ms');
 });
 
 testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nearest first; an unfinished one is not waited for', async function() {
