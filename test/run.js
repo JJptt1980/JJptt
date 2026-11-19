@@ -2461,6 +2461,36 @@ testAsync('app: an article read ahead a while ago is read again and drawn again 
   assert.ok(/^https:\/\/x\/1\.html\?_=\d+$/.test(asked[1]));
 });
 
+test('app: the pushes heading counts 推 / 噓 / → (the list shows 推 minus 噓)', function() {
+  var ps = [{ tag: '推' }, { tag: '推' }, { tag: '→' }, { tag: '噓' }];
+  assert.strictEqual(JJMobile.pushTally(ps), '推文 4　推 2・噓 1・→ 1');
+  assert.strictEqual(JJMobile.pushTally([]), '推文 0');
+});
+
+test('app: www.ptt.cc down is kept over a restart; other kinds down -> a shorter wait', function() {
+  var isApp = lib.isApp, store = {};
+  global.localStorage = { getItem: function(k) { return k in store ? store[k] : null; }, setItem: function(k, v) { store[k] = String(v); } };
+  try {
+    lib.isApp = function() { return true; };
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/index.html');
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.loadWebDown();
+    assert.ok(PttReader.webRecentlyDown('list'), 'remembered');
+    assert.ok(!PttReader.webRecentlyDown('article'));
+    assert.ok(PttReader.webRecentlyDown(), 'something down: the article page is given ' + PttReader.WEB_TIMEOUT_SHORT_MS + ' ms');
+    assert.ok(/WEB_TIMEOUT_SHORT_MS/.test(PttReader.prototype.webDocTimed.toString()));
+    assert.ok(/ptt\.loggingIn/.test(PttReader.prototype.fetchDoc.toString()), 'still logging in: to the BBS, waiting for it');
+    PttReader.markWebUp('https://www.ptt.cc/bbs/Test/index.html');
+    PttReader.webDownBy = {}; PttReader.loadWebDown();
+    assert.ok(!PttReader.webRecentlyDown('list'), 'back up: forgotten');
+  } finally {
+    lib.isApp = isApp;
+    delete global.localStorage;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
 testAsync('extension: a copy read ahead on the hidden connection a while ago is marked stale', async function() {
   var r = new PttReader({ conn: {} });
   var a = { url: 'u', meta: { '時間': '' }, pushes: [] };
