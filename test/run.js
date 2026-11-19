@@ -1086,6 +1086,9 @@ function boardScript(after) {
   s.push(['搜尋文章代碼(AID): #', {}]);                                            // 9
   s[9][1][AID + '\r'] = 10;
   s.push(['【板主:x】 看板《Test》 ●', after]);                                     // 10
+  // Q: the 文章網址 under the cursor (the AID landed on the right one)
+  after.Q = 'qbox';
+  s.qbox = ['【板主:x】 看板《Test》 ●\n│ 文章網址: http://www.ptt.cc/bbs/Test/M.1451110159.A.379.html │\n請按任意鍵繼續', { ' ': 10 }];
   return s;
 }
 
@@ -1098,7 +1101,7 @@ testAsync('push: to the board, the article by AID, X, 推, text, confirm', async
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'X', '1', '說得好\r', 'y\r']);
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'Q', ' ', 'X', '1', '說得好\r', 'y\r']);
 });
 testAsync('push: a board that does not allow it says so', async function() {
   var s = boardScript({ 'X': 11 });
@@ -1124,7 +1127,7 @@ testAsync('reply: y, to the board, same title, no quote, lines, Ctrl-X, save, si
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.reply('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '第一行\n第二行', false);
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'y', 'f\r', 'y\r', 'n\r',
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'Q', ' ', 'y', 'f\r', 'y\r', 'n\r',
                                    '第一行', '\r', '第二行', '\x18', 's\r', '0\r', ' ']);
 });
 
@@ -1143,7 +1146,7 @@ testAsync('reply: an answered question stays on the screen and is not answered a
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.reply('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '嗨', false);
-  sameJson(f.typed.slice(6), ['y', 'f\r', 'y\r', 'n\r', '嗨', '\x18', 's\r', ' ']);
+  sameJson(f.typed.slice(8), ['y', 'f\r', 'y\r', 'n\r', '嗨', '\x18', 's\r', ' ']);
 });
 
 test('發文 categories from the Ctrl-P screen', function() {
@@ -1239,7 +1242,7 @@ testAsync('push: the list header 看板《…》 is not the answer to the text -
 function confirmScript(afterYes) {
   var s = boardScript({ 'X': 11 });
   var head = '【板主:x】 看板《Test》';
-  s[10] = [head + '\n●   1 1/01 tester  □ 測試', { 'X': 11 }];
+  s[10] = [head + '\n●   1 1/01 tester  □ 測試', { 'X': 11, 'Q': 'qbox' }];
   s.push([head + '\n●   1 1/01 tester  □ 測試\n作者本人, 使用 → 加註方式\n→ tester:', { '滾蛋\r': 'sure' }]);  // 11
   s.sure = [head + '\n●   1 1/01 tester  □ 測試\n→ tester: 滾蛋\n確定要加入嗎？ [y/N]:', { 'y\r': 'after' }];
   s.after = afterYes;
@@ -2604,6 +2607,36 @@ testAsync('BBS list: PTT opens another article than the row -> not shown, found 
   r = await f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, {});
   assert.deepStrictEqual(f.calls, [[3, 'I26921216', false]], 'the right one: once');
   assert.ok(JJPtt.linesAre(mk('i26921216', 'Re: [新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤'), { author: 'I26921216', title: 'Re: [新聞] 女子打卡竟拉扯「雷門大燈籠」' }));
+});
+
+testAsync('BBS: the AID landing on another article (the list still in a search) -> out of the search and again; never the wrong one', async function() {
+  var WANT = 'https://www.ptt.cc/bbs/Gossiping/M.1794600000.A.123.html';
+  var NEAR = 'https://www.ptt.cc/bbs/Gossiping/M.1794618914.A.E04.html';
+  var setup = function(inSearch, stuck) {
+    var p = Object.create(JJPtt.prototype), sent = [], q = false, cur = '';
+    p.listQuery = '';
+    p.toBoard = function() { return Promise.resolve(); };
+    p.wait = p.settle = function() { return Promise.resolve(); };
+    p.screen = function() { return q ? '│ 文章網址: ' + cur.replace(/^https/, 'http') + ' │' : '列表'; };
+    p.send = function(k) {
+      sent.push(k);
+      if (k === 'Q') q = true;
+      else if (k === ' ') q = false;
+      else if (k === '\x1b[D' && !stuck) inSearch = false;
+      else if (/\r$/.test(k)) cur = inSearch ? NEAR : WANT;
+    };
+    return { p: p, sent: sent };
+  };
+  var f = setup(true);
+  await f.p.toArticle(WANT);
+  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ', '\x1b[D', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ']);
+  f = setup(false);
+  await f.p.toArticle(WANT);
+  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' '], 'right at once: no more keys');
+  f = setup(true, true);
+  await assert.rejects(f.p.toArticle(WANT), /跳到別篇/);
+  assert.ok(JJPtt.sameArticle('http://www.ptt.cc/bbs/Gossiping/M.1.A.ABC.html', 'https://www.ptt.cc/bbs/Gossiping/M.1.A.abc.html?_=1'));
+  assert.ok(!JJPtt.sameArticle('', ''));
 });
 
 testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nearest first; an unfinished one is not waited for', async function() {
