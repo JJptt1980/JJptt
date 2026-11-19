@@ -2230,6 +2230,40 @@ test('BBS article lines -> a page like www.ptt.cc\'s (header, body with links, p
   assert.ok(html.indexOf('<span class="push-userid">bob</span><span class="push-content">: 補</span><span class="push-ipdatetime"> 11/19 01:03') >= 0);
 });
 
+test('BBS article lines keep their colours: spans like www.ptt.cc\'s, read by the reader', function() {
+  // a fake screen row: [text, fg, bg, bright] runs; 中 is a double-byte character
+  var mk = function(runs) {
+    var row = [];
+    runs.forEach(function(r) {
+      r[0].split('').forEach(function(ch) {
+        var a = { fg: r[1], bg: r[2], bright: !!r[3], invert: false };
+        if (ch === '中') { row.push(Object.assign({ ch: 'x', isLeadByte: true }, a)); row.push(Object.assign({ ch: 'y' }, a)); }
+        else row.push(Object.assign({ ch: ch }, a));
+      });
+    });
+    while (row.length < 20) row.push({ ch: ' ', fg: 7, bg: 0, bright: false });
+    return row;
+  };
+  var buf = { cols: 20, lines: [
+    mk([['plain ', 7, 0], ['red', 1, 0, 1], [' 中', 3, 4]]),
+    mk([['see https://a.b/c', 7, 0]]),
+    mk([['bar  ', 7, 2]])
+  ], getRowText: function() { return '中'; } };
+  var h0 = JJPtt.rowHtml(buf, 0);
+  assert.strictEqual(h0, 'plain <span class="f1 hl b0">red</span><span class="f3 b4"> 中</span>');
+  assert.strictEqual(JJPtt.rowHtml(buf, 1), 'see <a href="https://a.b/c">https://a.b/c</a>', 'trailing blanks on black dropped, URL linked');
+  assert.strictEqual(JJPtt.rowHtml(buf, 2), '<span class="f7 b2">bar  </span>', 'a coloured background keeps its blanks');
+  var lines = [' 作者  t (t)', ' 標題  x', ' 時間  y', '───────────────────', 'plain red  中'];
+  lines.html = [];
+  lines.html[4] = h0;
+  var html = JJPtt.articleHtml(lines);
+  assert.ok(html.indexOf('<span class="f1 hl b0">red</span>') >= 0);
+  var st = PttReader.colorState({ getAttribute: function(a) { return a === 'class' ? 'f3 b4' : null; } }, { fg: 7, bg: 0, hl: false });
+  assert.strictEqual(st.fg, 3); assert.strictEqual(st.bg, 4); assert.strictEqual(st.hl, false);
+  st = PttReader.colorState({ getAttribute: function(a) { return a === 'class' ? 'f1 hl b0' : null; } }, { fg: 7, bg: 0, hl: false });
+  assert.ok(st.fg === 1 && st.hl, 'the reader sees the colour');
+});
+
 test('BBS board page -> index HTML with jjterm: links, older page below the lowest number', function() {
   var html = JJPtt.indexHtml('Test', [{ num: 5, nrec: '', date: '11/19', author: 'a', title: 't5' },
                                       { num: 6, nrec: '', date: '11/19', author: '-', title: '(本文已被刪除)', deleted: true }], 'jjterm:list/Test/5');
@@ -2255,6 +2289,58 @@ testAsync('BBS article: Enter, every page by Page Down until 100%, back with q',
   assert.strictEqual(lines.length, 9);
   assert.strictEqual(lines[4], '第一行');
   assert.strictEqual(lines[8], '→ bob: 補 11/19 01:03');
+});
+
+test('BBS search: www.ptt.cc search?q= as PTT\'s own keys (a / Z /), its addresses and links', function() {
+  var c = JJPtt.searchCmd('author:alice');
+  assert.strictEqual(c.key, 'a'); assert.strictEqual(c.text, 'alice');
+  assert.ok(c.ask.test('搜尋作者: ') && c.ask.test('增加條件 作者: '));
+  c = JJPtt.searchCmd('recommend:-100');
+  assert.strictEqual(c.key, 'Z'); assert.strictEqual(c.text, '-100');
+  assert.ok(c.ask.test('搜尋推文數高於多少 (<0則搜噓文數) 的文章: '));
+  c = JJPtt.searchCmd(' 颱風 假 ');
+  assert.strictEqual(c.key, '/'); assert.strictEqual(c.text, '颱風 假'); assert.ok(c.ask.test('搜尋標題: '));
+  assert.strictEqual(JJPtt.searchCmd(''), null);
+  assert.strictEqual(JJPtt.searchCmd('recommend:0'), null);
+  assert.deepStrictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Gossiping/search?q=recommend%3A100'),
+    { board: 'Gossiping', query: 'recommend:100', before: 0, page: 1 });
+  assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/search?page=2&q=a+b').page, 2);
+  assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/search?page=2&q=a+b').query, 'a b');
+  assert.deepStrictEqual(PttReader.termSearch('jjterm:search/Test/40/' + encodeURIComponent('author:bob')),
+    { board: 'Test', query: 'author:bob', before: 40, page: 1 });
+  assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/index.html'), null);
+  var html = JJPtt.indexHtml('Test', [{ num: 3, nrec: '爆', date: '11/19', author: 'a', title: 't' }], '', 'recommend:100');
+  assert.ok(html.indexOf('href="jjterm:art/Test/3/recommend%3A100"') >= 0, 'opened inside the search');
+});
+
+testAsync('BBS search: into the board, the search key, its prompt, the words; the list newest first', async function() {
+  var LIST = '【板主:x】  看板《Test》  文章選讀\n  1 + 511/19 a  □ [問卦] 舊\n  2 + 311/19 b  □ [問卦] 新\n\n 文章選讀 (y)回應';
+  var ASK = LIST.replace(' 文章選讀 (y)回應', '搜尋推文數高於多少 (<0則搜噓文數) 的文章: ');
+  var HITS = '【板主:x】  看板《Test》  文章選讀\n  1 + 511/19 a  □ [問卦] 舊\n  2 + 311/19 b  □ [問卦] 新\n\n 文章選讀 (y)回應 ';
+  var f = fakePtt([[LIST, { 'Z': 1 }], [ASK, { '3\r': 2, '3': 1 }], [HITS, { '\x1b[4~': 2 }]]);
+  f.app.buf.rows = 5;
+  f.app.conn.isConnected = true;
+  f.ptt.user = 'me';
+  f.ptt.ensureIn = function() { return Promise.resolve(); };
+  var html = await f.ptt.boardPage('Test', 0, 'recommend:3');
+  assert.strictEqual(f.typed[0], 'Z');
+  assert.strictEqual(f.ptt.listQuery, 'recommend:3');
+  assert.ok(html.indexOf('jjterm:art/Test/2/recommend%3A3') < html.indexOf('jjterm:art/Test/1/recommend%3A3'), 'newest first');
+});
+
+testAsync('BBS search with nothing found: the message is closed, an empty list (not the whole board\'s)', async function() {
+  var LIST = '【板主:x】  看板《Test》  文章選讀\n  1 + 511/19 a  □ [問卦] 舊\n\n\n 文章選讀 (y)回應';
+  var ASK = LIST.replace(' 文章選讀 (y)回應', '搜尋標題: ');
+  var NONE = LIST.replace(' 文章選讀 (y)回應', '找不到符合條件的文章。     請按任意鍵繼續');
+  var f = fakePtt([[LIST, { '/': 1 }], [ASK, { 'zzz\r': 2 }], [NONE, { ' ': 3 }], [LIST + ' ', {}]]);
+  f.app.buf.rows = 5;
+  f.app.conn.isConnected = true;
+  f.ptt.user = 'me';
+  f.ptt.ensureIn = function() { return Promise.resolve(); };
+  var html = await f.ptt.boardPage('Test', 0, 'zzz');
+  assert.ok(html.indexOf('r-ent') < 0, 'no rows');
+  assert.ok(!f.ptt.listQuery, 'not in a search');
+  assert.strictEqual(f.typed[f.typed.length - 1], ' ', 'the message closed');
 });
 
 testAsync('BBS article already open further down: Home to the first page, then every page', async function() {
@@ -2429,6 +2515,59 @@ test('extension: picture hosts that need a referrer are in the manifest\'s host 
   assert.ok(/1802/.test(PttReader.prototype.ensureOver18.toString()), 'the referrer rule');
 });
 
+testAsync('www.ptt.cc down a moment ago: straight to the BBS, a look at the web a minute, back once it answers', async function() {
+  var isApp = lib.isApp, DP = global.DOMParser, T = PttReader.WEB_TIMEOUT_MS;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    lib.isApp = function() { return true; };
+    var calls = [], web = [];
+    var ptt = { user: 'tester',
+      boardPage: function(b) { calls.push(['list', b]); return Promise.resolve('<list>'); },
+      termArticle: function() { var e = new Error('PTT 沒有回應'); return Promise.reject(e); } };
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    var answer = 'down';
+    r.webDoc = function(u) {
+      web.push(u);
+      if (answer === 'ok') return Promise.resolve({ web: true });
+      if (answer === 'hang') return new Promise(function() {});
+      var e = new Error('HTTP 503'); e.webStatus = 503; return Promise.reject(e);
+    };
+    PttReader.webDownAt = Date.now();
+    PttReader.probeAt = 0;
+    var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm);
+    assert.strictEqual(web.length, 1, 'only the one look at the web site, in the background');
+    await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.strictEqual(web.length, 1, 'no second look within the minute');
+    // a BBS failure is not tried again on the web site
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html'), /沒有回應/);
+    assert.strictEqual(web.length, 1);
+    // what the BBS can't open still goes to the web site
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/x.html'), /HTTP 503|故障/);
+    assert.strictEqual(web.length, 2);
+    // the web site answers again: the next look ends the BBS stand-in
+    answer = 'ok';
+    PttReader.probeAt = 0;
+    await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    await new Promise(function(res) { setTimeout(res, 5); });
+    assert.ok(!PttReader.webRecentlyDown());
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.web, 'the web site again');
+    // no answer at all counts as down
+    answer = 'hang';
+    PttReader.WEB_TIMEOUT_MS = 20;
+    calls.length = 0;
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm && PttReader.webRecentlyDown());
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.WEB_TIMEOUT_MS = T;
+    PttReader.webDownAt = 0;
+    PttReader.probeAt = 0;
+  }
+});
+
 testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the extension are not', async function() {
   var isApp = lib.isApp;
   var DP = global.DOMParser;
@@ -2453,10 +2592,19 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
     assert.deepStrictEqual(calls.pop(), ['list', 'Test', 120]);
     await r.fetchDoc('jjterm:art/Test/7');
     assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7']);
-    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/search?q=abc'), /網頁版現在故障.*暫時不能用/);
+    ptt.boardPage = function(b, before, q) { calls.push(['list', b, before, q]); return Promise.resolve('<list>'); };
+    await r.fetchDoc('https://www.ptt.cc/bbs/Test/search?q=abc');
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 0, 'abc'], 'searched on the BBS');
+    await r.fetchDoc('jjterm:search/Test/30/author%3Abob');
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 30, 'author:bob']);
+    await r.fetchDoc('jjterm:art/Test/7/author%3Abob');
+    assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7/author%3Abob']);
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/search?page=2&q=abc'), /重新搜尋/);
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html/x'), /網頁版現在故障.*暫時不能用/);
     ptt.user = '';
     await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /登入 PTT 帳號後/);
     ptt.user = 'tester';
+    PttReader.webDownAt = 0;  // not down a moment ago: the web site first
     status = 404;
     await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /HTTP 404/);
     status = 500;
