@@ -652,7 +652,8 @@ test('app search: 推文數 labels (爆文, 噓爆) and the quick buttons', func
   assert.strictEqual(JJMobile.pushQueryLabel('-100'), '噓爆');
   assert.strictEqual(JJMobile.pushQueryLabel('20'), '推 ≥ 20');
   assert.strictEqual(JJMobile.pushQueryLabel('-10'), '噓 ≥ 10');
-  assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, -100]);
+  assert.strictEqual(JJMobile.pushQueryLabel('200'), '止爆');
+  assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, 200, -100]);
 });
 test('version: JJptt\'s version and the run; before that 0.0.N', function() {
   assert.strictEqual(JJMobile.version(57, '1.33.0'), '1.33.0 (57)');
@@ -2483,7 +2484,7 @@ testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nea
     var rows = [10, 11, 12, 13, 14].map(function(n) { return { author: 'a' + n, title: 't' + n, num: n }; });
     var snap = { board: 'Test', rows: rows, index: 2 };
     assert.ok(!r.bgPlan(snap, 2, 0), 'web up: as usual');
-    PttReader.webDownAt = Date.now();
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/M.1.A.2.html');
     assert.deepStrictEqual(r.bgOrder(snap, 2, 0), [2, 3, 1, 4, 0]);
     assert.deepStrictEqual(r.bgOrder(snap, 2, -1), [2, 1, 3, 0, 4], 'reading upwards: up first');
     assert.ok(r.bgPlan(snap, 2, 0));
@@ -2503,7 +2504,7 @@ testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nea
     lib.isApp = isApp;
     lib.isExtension = isExt;
     global.DOMParser = DP;
-    PttReader.webDownAt = 0;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
   }
 });
 
@@ -2513,6 +2514,69 @@ test('extension: picture hosts that need a referrer are in the manifest\'s host 
     assert.ok(m.host_permissions.indexOf('https://' + h + '/*') >= 0, h);
   });
   assert.ok(/1802/.test(PttReader.prototype.ensureOver18.toString()), 'the referrer rule');
+});
+
+testAsync('the app just opened, logging in: a board read on the BBS waits for the login instead of failing', async function() {
+  var isApp = lib.isApp, DP = global.DOMParser;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    lib.isApp = function() { return true; };
+    var calls = [];
+    var ptt = { user: '', boardPage: function(b) { calls.push(b); return Promise.resolve('<list>'); } };
+    ptt.waitLogin = JJPtt.prototype.waitLogin;
+    var finish;
+    ptt.waitLogin(new Promise(function(res) { finish = res; }));
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    r.webDoc = function() { var e = new Error('HTTP 500'); e.webStatus = 500; return Promise.reject(e); };
+    var got = r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    await new Promise(function(res) { setTimeout(res, 5); });
+    assert.deepStrictEqual(calls, [], 'not yet');
+    ptt.user = 'tester';
+    finish();
+    var doc = await got;
+    assert.ok(doc.jjFromTerm);
+    assert.deepStrictEqual(calls, ['Test']);
+    assert.strictEqual(ptt.loggingIn, null, 'over');
+    // the login failed: the usual message
+    ptt.user = '';
+    ptt.waitLogin(Promise.reject(new Error('密碼不對')));
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /登入 PTT 帳號後/);
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+testAsync('www.ptt.cc down for board lists and articles only: its search still answers and is used', async function() {
+  var isApp = lib.isApp, DP = global.DOMParser;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    lib.isApp = function() { return true; };
+    var calls = [], web = [];
+    var ptt = { user: 'tester', boardPage: function(b, before, q) { calls.push([b, q]); return Promise.resolve('<list>'); } };
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    r.webDoc = function(u) {
+      web.push(u);
+      if (/search/.test(u)) return Promise.resolve({ web: true });
+      var e = new Error('HTTP 500'); e.webStatus = 500; return Promise.reject(e);
+    };
+    PttReader.probeAt = Date.now();  // no look at the web site in this test
+    var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm && PttReader.webRecentlyDown('list'));
+    assert.strictEqual(PttReader.webKind('https://www.ptt.cc/bbs/Test/search?q=recommend%3A100'), 'search');
+    assert.ok(!PttReader.webRecentlyDown('search'));
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/search?q=recommend%3A100');
+    assert.ok(doc.web, 'search from the web site');
+    assert.deepStrictEqual(calls, [['Test', undefined]]);
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.strictEqual(web.filter(function(u) { return /index/.test(u); }).length, 1, 'the list straight from the BBS now');
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.probeAt = 0;
+  }
 });
 
 testAsync('www.ptt.cc down a moment ago: straight to the BBS, a look at the web a minute, back once it answers', async function() {
@@ -2532,7 +2596,8 @@ testAsync('www.ptt.cc down a moment ago: straight to the BBS, a look at the web 
       if (answer === 'hang') return new Promise(function() {});
       var e = new Error('HTTP 503'); e.webStatus = 503; return Promise.reject(e);
     };
-    PttReader.webDownAt = Date.now();
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/index.html');
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/M.1.A.2.html');
     PttReader.probeAt = 0;
     var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
     assert.ok(doc.jjFromTerm);
@@ -2550,7 +2615,7 @@ testAsync('www.ptt.cc down a moment ago: straight to the BBS, a look at the web 
     PttReader.probeAt = 0;
     await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
     await new Promise(function(res) { setTimeout(res, 5); });
-    assert.ok(!PttReader.webRecentlyDown());
+    assert.ok(!PttReader.webRecentlyDown('list'), 'board lists answer again');
     doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
     assert.ok(doc.web, 'the web site again');
     // no answer at all counts as down
@@ -2563,7 +2628,7 @@ testAsync('www.ptt.cc down a moment ago: straight to the BBS, a look at the web 
     lib.isApp = isApp;
     global.DOMParser = DP;
     PttReader.WEB_TIMEOUT_MS = T;
-    PttReader.webDownAt = 0;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
     PttReader.probeAt = 0;
   }
 });
@@ -2604,7 +2669,7 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
     ptt.user = '';
     await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /登入 PTT 帳號後/);
     ptt.user = 'tester';
-    PttReader.webDownAt = 0;  // not down a moment ago: the web site first
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};  // not down a moment ago: the web site first
     status = 404;
     await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /HTTP 404/);
     status = 500;
@@ -2614,7 +2679,7 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
   } finally {
     lib.isApp = isApp;
     global.DOMParser = DP;
-    PttReader.webDownAt = 0;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
   }
 });
 
