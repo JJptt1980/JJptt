@@ -2268,7 +2268,7 @@ test('BBS article lines keep their colours: spans like www.ptt.cc\'s, read by th
 test('BBS board page -> index HTML with jjterm: links, older page below the lowest number', function() {
   var html = JJPtt.indexHtml('Test', [{ num: 5, nrec: '', date: '11/19', author: 'a', title: 't5' },
                                       { num: 6, nrec: '', date: '11/19', author: '-', title: '(本文已被刪除)', deleted: true }], 'jjterm:list/Test/5');
-  assert.ok(html.indexOf('<a href="jjterm:art/Test/5">t5</a>') >= 0);
+  assert.ok(html.indexOf('<a href="jjterm:art/Test/5#a/t5">t5</a>') >= 0, 'the author and title come along');
   assert.ok(html.indexOf('jjterm:art/Test/6') < 0, 'a deleted article has no link');
   assert.ok(html.indexOf('href="jjterm:list/Test/5">‹ 上頁') >= 0);
   assert.strictEqual(JJMobile.webUrl('jjterm:art/Test/5'), 'jjterm:art/Test/5');
@@ -2311,7 +2311,12 @@ test('BBS search: www.ptt.cc search?q= as PTT\'s own keys (a / Z /), its address
     { board: 'Test', query: 'author:bob', before: 40, page: 1 });
   assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/index.html'), null);
   var html = JJPtt.indexHtml('Test', [{ num: 3, nrec: '爆', date: '11/19', author: 'a', title: 't' }], '', 'recommend:100');
-  assert.ok(html.indexOf('href="jjterm:art/Test/3/recommend%3A100"') >= 0, 'opened inside the search');
+  assert.ok(html.indexOf('href="jjterm:art/Test/3/recommend%3A100#a/t"') >= 0, 'opened inside the search');
+  html = JJPtt.indexHtml('Test', [{ num: 3, nrec: '爆', date: '11/19', author: 'I26921216', title: '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700/公斤' }], '', 'recommend:100');
+  var href = /href="([^"]+)"/.exec(html)[1].replace(/&amp;/g, '&');
+  assert.deepStrictEqual(JJPtt.wantFromUrl(href), { author: 'I26921216', title: '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700/公斤' });
+  assert.strictEqual(PttReader.articleUrl(href), 'jjterm:art/Test/3/recommend%3A100', 'the same article key as before');
+  assert.strictEqual(JJPtt.wantFromUrl('jjterm:art/Test/3'), null);
 });
 
 testAsync('BBS search: into the board, the search key, its prompt, the words; the list newest first', async function() {
@@ -2713,7 +2718,7 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
     var calls = [];
     var ptt = { user: 'tester',
       boardPage: function(b, before) { calls.push(['list', b, before]); return Promise.resolve('<list>'); },
-      termArticle: function(u) { calls.push(['art', u]); return Promise.resolve({ url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', html: '<art>' }); } };
+      termArticle: function(u, want) { calls.push(want ? ['art', u, want] : ['art', u]); return Promise.resolve({ url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', html: '<art>' }); } };
     var r = new PttReader({ mobile: { ptt: ptt } });
     var status = 500;
     r.webDoc = function() { var e = new Error('HTTP ' + status); e.webStatus = status; return Promise.reject(e); };
@@ -2736,6 +2741,9 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
     assert.deepStrictEqual(calls.pop(), ['list', 'Test', 30, 'author:bob']);
     await r.fetchDoc('jjterm:art/Test/7/author%3Abob');
     assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7/author%3Abob']);
+    // from a list read on the BBS: the number is checked against the row's author and title
+    await r.fetchDoc('jjterm:art/Test/7/recommend%3A100#bob/' + encodeURIComponent('[新聞] 某某'));
+    assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7/recommend%3A100', { author: 'bob', title: '[新聞] 某某' }]);
     await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/search?page=2&q=abc'), /重新搜尋/);
     await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html/x'), /網頁版現在故障.*暫時不能用/);
     ptt.user = '';
