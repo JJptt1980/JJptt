@@ -2433,6 +2433,48 @@ testAsync('app: an article being read ahead shows its pages when opened; one tha
   assert.deepStrictEqual(seen, [1, 2], 'the page already read, then the new read');
 });
 
+testAsync('app: an article read ahead a while ago is read again and drawn again when it has more pushes', async function() {
+  var m = Object.create(JJMobile.prototype);
+  m.articles = {};
+  var asked = [];
+  var fresh = { url: 'jjterm:art/Test/5', fromTerm: true, pushes: [1, 2, 3] };
+  m.app = { reader: { fetchArticle: function(url) { asked.push(url); return Promise.resolve(fresh); } } };
+  var old = { url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', fromTerm: true, pushes: [1] };
+  var drawn = [];
+  m.fillArticle = function(screen, a) { screen.article = a; drawn.push(a); };
+  var view = { isConnected: true, scrollTop: 300, innerHTML: 'x' };
+  var screen = { view: view, article: old };
+  m.articles['jjterm:art/Test/5'] = { at: Date.now() - 5000, promise: Promise.resolve(old) };
+  assert.ok(!m.freshen(screen, old, 'jjterm:art/Test/5'), 'just read: as it is');
+  m.articles['jjterm:art/Test/5'].at = Date.now() - JJMobile.STALE_MS - 1;
+  assert.ok(m.freshen(screen, old, 'jjterm:art/Test/5'));
+  await new Promise(function(res) { setTimeout(res, 5); });
+  assert.deepStrictEqual(asked, ['jjterm:art/Test/5'], 'on the BBS: no ?_= added');
+  assert.deepStrictEqual(drawn, [fresh]);
+  assert.strictEqual(view.scrollTop, 300, 'the place kept');
+  assert.strictEqual(fresh.url, old.url, 'the web address kept for pushing');
+  // web: past the cache; no more pushes: not drawn again
+  m.articles['https://x/1.html'] = { at: 0, promise: Promise.resolve(old) };
+  fresh.pushes = [1];
+  screen.article = old;
+  assert.ok(m.freshen(screen, { pushes: [1] }, 'https://x/1.html'));
+  assert.ok(/^https:\/\/x\/1\.html\?_=\d+$/.test(asked[1]));
+});
+
+testAsync('extension: a copy read ahead on the hidden connection a while ago is marked stale', async function() {
+  var r = new PttReader({ conn: {} });
+  var a = { url: 'u', meta: { '時間': '' }, pushes: [] };
+  r.prefetch = { k: { board: 'test', author: 'a1', title: PttReader.prefetchKey('', '', 't1').slice(2), bg: true, done: true,
+                      at: Date.now() - 60000, doneAt: Date.now() - PttReader.STALE_MS - 1, promise: Promise.resolve(a) } };
+  var p = r.takePrefetch({ board: 'Test', author: 'a1', title: 't1', time: '' });
+  assert.ok(p.stale);
+  assert.strictEqual(await p, a);
+  r.prefetch = { k: { board: 'test', author: 'a1', title: PttReader.prefetchKey('', '', 't1').slice(2), bg: true, done: true,
+                      at: Date.now() - 60000, doneAt: Date.now() - 1000, promise: Promise.resolve(a) } };
+  assert.ok(!r.takePrefetch({ board: 'Test', author: 'a1', title: 't1', time: '' }).stale, 'just read');
+  assert.ok(/pre\.stale\) self\.refreshFromTerminal/.test(PttReader.prototype.openFor.toString()));
+});
+
 test('extension reading mode: www.ptt.cc down -> read the article in the terminal (not in the app, not for 404)', function() {
   var isApp = lib.isApp;
   try {
