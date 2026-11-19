@@ -3018,6 +3018,62 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
   }
 });
 
+// ---- SSH: BigInteger.modPow with BigInt (js/fast_modpow.js) -------------------
+
+(function() {
+  // the SSH library as the page loads it, then fast_modpow.js on top
+  var ctx = { navigator: { userAgent: '', appName: 'Netscape', platform: '' }, document: {}, console: { log: function() {}, debug: function() {} } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(root, 'js/paramikojs_ssh.min.js'), 'utf8'), ctx);
+  var BI = ctx.BigInteger;
+  var jsbn = BI.prototype.modPow;
+  vm.runInContext(fs.readFileSync(path.join(root, 'js/fast_modpow.js'), 'utf8'), ctx, { filename: 'js/fast_modpow.js' });
+  var crypto = require('crypto');
+  function rnd(bytes) { return new BI(crypto.randomBytes(bytes).toString('hex'), 16); }
+  function big(s) { return new BI(s, 10); }
+
+  test('ssh: modPow is the BigInt one, with the same results as jsbn', function() {
+    assert.notStrictEqual(BI.prototype.modPow, jsbn);
+    assert.strictEqual(BI.prototype.modPow.jsbn, jsbn);
+    var cases = [
+      [big('2'), rnd(512), rnd(512).setBit(4095).setBit(0)],      // the DH group exchange: 4096-bit p
+      [rnd(512), big('65537'), rnd(256).setBit(2047).setBit(0)],  // an RSA host key check
+      [rnd(64), rnd(64), rnd(64).clearBit(0).setBit(511)],        // an even modulus
+      [rnd(80), big('0'), rnd(32)], [big('0'), rnd(8), rnd(8)],
+      [rnd(8), rnd(8), big('1')], [rnd(16), big('1'), rnd(8)],
+      [big('-12345'), big('7'), big('1000003')]                   // negative: left to jsbn
+    ];
+    for (var i = 0; i < 20; ++i) cases.push([rnd(1 + i * 3), rnd(1 + i * 5), rnd(1 + i * 4).setBit(i)]);
+    cases.forEach(function(c, i) {
+      var want = jsbn.call(c[0], c[1], c[2]).toString(16);
+      var got = c[0].modPow(c[1], c[2]);
+      assert.ok(got instanceof BI, 'case ' + i + ': a BigInteger back');
+      assert.strictEqual(got.toString(16), want, 'case ' + i);
+    });
+  });
+
+  test('ssh: modPow of a 4096-bit group exchange is fast', function() {
+    var p = rnd(512).setBit(4095).setBit(0), x = rnd(512);
+    var t = Date.now();
+    big('2').modPow(x, p);
+    assert.ok(Date.now() - t < 400, (Date.now() - t) + ' ms');
+  });
+
+  test('ssh: fast_modpow installs once, and not without BigInt', function() {
+    assert.strictEqual(ctx.FastModPow.install(BI), true);
+    assert.strictEqual(BI.prototype.modPow.jsbn, jsbn, 'not wrapped twice');
+    var Fake = function() {};
+    Fake.prototype.modPow = function() { return 'old'; };
+    var B = ctx.BigInt;
+    ctx.BigInt = undefined;
+    try {
+      assert.strictEqual(vm.runInContext('FastModPow.install', ctx).call(ctx.FastModPow, Fake), false);
+    } finally { ctx.BigInt = B; }
+    assert.strictEqual(new Fake().modPow(), 'old');
+  });
+})();
+
 (async function() {
   for (var i = 0; i < asyncTests.length; ++i) {
     try { await asyncTests[i][1](); passed++; console.log('  ok  ' + asyncTests[i][0]); }
