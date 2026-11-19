@@ -17,7 +17,7 @@ global.i18n = function(k) { return (locale.zh_TW[k] && locale.zh_TW[k].message) 
 global.$ = function() { return { length: 0 }; };
 global.lib = { safeGetItem: function(k) { return global.lib.store[k] || null; },
                safeSetItem: function(k, v) { global.lib.store[k] = v; }, store: {} };
-['js/string_util.js', 'js/predefined_config.js', 'js/fact_check.js', 'js/reader.js', 'js/mobile_ptt.js', 'js/mobile.js', 'js/mobile_article.js', 'js/mobile_board.js', 'js/pref.js', 'js/spam_guard.js'].forEach(function(f) {
+['js/string_util.js', 'js/predefined_config.js', 'js/fact_check.js', 'js/reader.js', 'js/mobile_ptt.js', 'js/mobile.js', 'js/mobile_article.js', 'js/mobile_board.js', 'js/mobile_home.js', 'js/pref.js', 'js/spam_guard.js'].forEach(function(f) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 });
 
@@ -2690,6 +2690,57 @@ testAsync('app: a list read on the BBS (jjterm: links) is read ahead though arti
     lib.isApp = isApp;
     PttReader.webDownAt = 0; PttReader.webDownBy = {};
   }
+});
+
+testAsync('app: list pages within a minute come from the cache, a reload reads again, a failure is not kept', async function() {
+  var m = Object.create(JJMobile.prototype), asked = [], fail = false;
+  m.app = { reader: { fetchDoc: function(url) { asked.push(url); return fail ? Promise.reject(new Error('x')) : Promise.resolve({ url: url }); } } };
+  var a = await m.listDoc('u1');
+  assert.strictEqual(await m.listDoc('u1'), a, 'the same page again: cached');
+  await m.listDoc('u1', true);
+  assert.deepStrictEqual(asked, ['u1', 'u1'], 'fresh: asked again');
+  m.listDocs.u1.at = Date.now() - JJMobile.LIST_CACHE_MS - 1;
+  await m.listDoc('u1');
+  assert.strictEqual(asked.length, 3, 'a minute old: asked again');
+  fail = true;
+  await assert.rejects(m.listDoc('u2'));
+  fail = false;
+  await m.listDoc('u2');
+  assert.strictEqual(asked.length, 5, 'a failure is not kept');
+});
+
+testAsync('app: a board\'s one-tap 推文數 searches are read ahead one at a time, not while search is down', async function() {
+  var m = Object.create(JJMobile.prototype), asked = [];
+  m.app = { reader: { fetchDoc: function(url) { asked.push(url); return Promise.resolve({}); } } };
+  PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  try {
+    m.prefetchSearches('Gossiping');
+    assert.strictEqual(asked.length, 1, 'one at a time');
+    for (var i = 0; i < 20; ++i) await Promise.resolve();
+    assert.deepStrictEqual(asked, JJMobile.QUICK_PUSH.map(function(q) {
+      return 'https://www.ptt.cc/bbs/Gossiping/search?q=recommend%3A' + q[0];
+    }));
+    var before = asked.length;
+    m.prefetchSearches('Gossiping');
+    for (i = 0; i < 20; ++i) await Promise.resolve();
+    assert.strictEqual(asked.length, before, 'read a moment ago: not again');
+    PttReader.webDownBy.search = PttReader.webDownAt = Date.now();
+    m.prefetchSearches('Stock');
+    assert.strictEqual(asked.length, before, 'search failing: nothing');
+  } finally {
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+test('app: 熱門看板 rows read from www.ptt.cc', function() {
+  var node = function(kids) {
+    return { querySelector: function(sel) { return kids[sel] || null; } };
+  };
+  var doc = { querySelectorAll: function() {
+    return [node({ '.board-name': { textContent: ' Gossiping ' }, '.board-nuser': { textContent: ' 9999 ' },
+                   '.board-title': { textContent: '◎[八卦] 測試' } }), node({})];
+  } };
+  assert.deepStrictEqual(JJMobile.parseHot(doc), [['Gossiping', '[八卦] 測試', '9999']]);
 });
 
 testAsync('BBS search: done when the list\'s footer is back, not at the echo of the words typed', async function() {
