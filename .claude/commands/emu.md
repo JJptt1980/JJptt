@@ -24,6 +24,7 @@ argument-hint: "[要檢查的東西，例如「推文顏色」（可省略）]"
 - 快照 `logged-in` 是登入後的狀態。登入不見時，先問站長，再用 `adb -s emulator-5570 emu avd snapshot load logged-in` 載回來。
 - 要假裝網頁版故障：在 WebView 裡執行 `PttReader.markWebDown('https://www.ptt.cc/bbs/Gossiping/index.html')`（看板列表），文章、搜尋各換成對應的網址。測完用 `PttReader.markWebUp(...)` 恢復。
 - 篩選列表的標準檢查流程：Gossiping → 爆 → 止爆 → XX，各點前幾篇，比對打開的標題和作者。
+- 各頁載入時間：`.claude/tools/emu-cdp.sh "$(cat .claude/tools/emu-pages.js)"`（`window.SIM_DOWN={}` 是網頁版現在的真實狀態），印出每頁毫秒數和來源；App 左下角也會顯示。目標每頁 1 秒內。
 - 自動跑這個流程：`.claude/tools/emu-cdp.sh "$(cat .claude/tools/emu-flow.js)"`。它會讓 App 以為網頁版故障（`window.SIM_DOWN`，預設列表、搜尋、文章全部故障；`{list:1, article:1}` 是「搜尋從網頁版、文章用代碼走 BBS」），依序開 爆文 → 止爆 → 噓爆 的前 4 篇，逐篇印出載入毫秒數和作者／標題對不對（`ok`）。可調 `SIM_QUERIES`、`SIM_N`、`SIM_PAUSE`、`SIM_READ`。目標：全部 `ok`，每篇 1 秒內。
 
 要檢查的東西：$ARGUMENTS

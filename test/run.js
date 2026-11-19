@@ -1086,8 +1086,10 @@ function boardScript(after) {
   s.push(['搜尋文章代碼(AID): #', {}]);                                            // 9
   s[9][1][AID + '\r'] = 10;
   s.push(['【板主:x】 看板《Test》 ●', after]);                                     // 10
-  // Q: the 文章網址 under the cursor (the AID landed on the right one)
+  // Q: the 文章網址 under the cursor (the AID landed on the right one);
+  // # again: the second jump (PTT's first one can land a few articles off)
   after.Q = 'qbox';
+  after['#'] = 9;
   s.qbox = ['【板主:x】 看板《Test》 ●\n│ 文章網址: http://www.ptt.cc/bbs/Test/M.1451110159.A.379.html │\n請按任意鍵繼續', { ' ': 10 }];
   return s;
 }
@@ -1101,7 +1103,7 @@ testAsync('push: to the board, the article by AID, X, 推, text, confirm', async
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'Q', ' ', 'X', '1', '說得好\r', 'y\r']);
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', '#', AID + '\r', 'Q', ' ', 'X', '1', '說得好\r', 'y\r']);
 });
 testAsync('push: a board that does not allow it says so', async function() {
   var s = boardScript({ 'X': 11 });
@@ -1127,7 +1129,7 @@ testAsync('reply: y, to the board, same title, no quote, lines, Ctrl-X, save, si
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.reply('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '第一行\n第二行', false);
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'Q', ' ', 'y', 'f\r', 'y\r', 'n\r',
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', '#', AID + '\r', 'Q', ' ', 'y', 'f\r', 'y\r', 'n\r',
                                    '第一行', '\r', '第二行', '\x18', 's\r', '0\r', ' ']);
 });
 
@@ -1146,7 +1148,7 @@ testAsync('reply: an answered question stays on the screen and is not answered a
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.reply('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '嗨', false);
-  sameJson(f.typed.slice(8), ['y', 'f\r', 'y\r', 'n\r', '嗨', '\x18', 's\r', ' ']);
+  sameJson(f.typed.slice(10), ['y', 'f\r', 'y\r', 'n\r', '嗨', '\x18', 's\r', ' ']);
 });
 
 test('發文 categories from the Ctrl-P screen', function() {
@@ -1242,7 +1244,7 @@ testAsync('push: the list header 看板《…》 is not the answer to the text -
 function confirmScript(afterYes) {
   var s = boardScript({ 'X': 11 });
   var head = '【板主:x】 看板《Test》';
-  s[10] = [head + '\n●   1 1/01 tester  □ 測試', { 'X': 11, 'Q': 'qbox' }];
+  s[10] = [head + '\n●   1 1/01 tester  □ 測試', { 'X': 11, 'Q': 'qbox', '#': 9 }];
   s.push([head + '\n●   1 1/01 tester  □ 測試\n作者本人, 使用 → 加註方式\n→ tester:', { '滾蛋\r': 'sure' }]);  // 11
   s.sure = [head + '\n●   1 1/01 tester  □ 測試\n→ tester: 滾蛋\n確定要加入嗎？ [y/N]:', { 'y\r': 'after' }];
   s.after = afterYes;
@@ -2613,27 +2615,34 @@ testAsync('BBS list: PTT opens another article than the row -> not shown, found 
 testAsync('BBS: the AID landing on another article (the list still in a search) -> out of the search and again; never the wrong one', async function() {
   var WANT = 'https://www.ptt.cc/bbs/Gossiping/M.1794600000.A.123.html';
   var NEAR = 'https://www.ptt.cc/bbs/Gossiping/M.1794618914.A.E04.html';
-  var setup = function(inSearch, stuck) {
+  var setup = function(inSearch, stuck, miss) {
     var p = Object.create(JJPtt.prototype), sent = [], q = false, cur = '';
+    p.app = {};
     p.listQuery = '';
     p.toBoard = function() { return Promise.resolve(); };
     p.wait = p.settle = function() { return Promise.resolve(); };
-    p.screen = function() { return q ? '│ 文章網址: ' + cur.replace(/^https/, 'http') + ' │' : '列表'; };
+    p.screen = function() {
+      return q ? '│ 文章網址: ' + cur.replace(/^https/, 'http') + ' │' : '列表\n' + (inSearch ? ' 系列文章  (y)回應' : ' 文章列表  (y)回應');
+    };
     p.send = function(k) {
       sent.push(k);
       if (k === 'Q') q = true;
       else if (k === ' ') q = false;
       else if (k === '\x1b[D' && !stuck) inSearch = false;
-      else if (/\r$/.test(k)) cur = inSearch ? NEAR : WANT;
+      else if (/\r$/.test(k)) cur = inSearch || miss-- > 0 ? NEAR : WANT;
     };
     return { p: p, sent: sent };
   };
   var f = setup(true);
   await f.p.toArticle(WANT);
-  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ', '\x1b[D', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ']);
+  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ', '\x1b[D', '#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ']);
   f = setup(false);
   await f.p.toArticle(WANT);
-  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' '], 'right at once: no more keys');
+  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' '], 'right at once (two jumps): no more keys');
+  // landed elsewhere in the whole list: tried again without ← (which would leave the board)
+  var g = setup(false, false, 2);  // both jumps land elsewhere
+  await g.p.toArticle(WANT);
+  assert.deepStrictEqual(g.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ', '#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' '], 'no ← outside a search');
   f = setup(true, true);
   await assert.rejects(f.p.toArticle(WANT), /跳到別篇/);
   assert.ok(JJPtt.sameArticle('http://www.ptt.cc/bbs/Gossiping/M.1.A.ABC.html', 'https://www.ptt.cc/bbs/Gossiping/M.1.A.abc.html?_=1'));
@@ -2687,28 +2696,58 @@ testAsync('BBS search: done when the list\'s footer is back, not at the echo of 
   var ASK = '【板主:x】  看板《Test》\n 1 a\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: ';
   var ECHO = ASK + '10';
   var DONE = '【板主:x】  系列《Test》\n 1 a\n 系列文章  (y)回應';
-  var p = Object.create(JJPtt.prototype), now = ECHO, t0 = Date.now();
+  var p = Object.create(JJPtt.prototype), now = ECHO, t0 = Date.now(), synced = 0;
   p.app = { conn: { isConnected: true } };
   p.connected = function() { return true; };
   p.screen = function() { return now; };
-  p.quiet = function() { return Promise.resolve(); };
+  p.sendSync = function(k) { synced++; return Promise.resolve(); };
   setTimeout(function() { now = DONE; }, 120);  // PTT searching a moment after the echo
   await p.searched(ASK);
   assert.ok(Date.now() - t0 >= 100, 'waited past the echo for the search');
+  assert.strictEqual(synced, 1, 'then a whole redraw: the list after the search');
   now = ECHO;
   setTimeout(function() { now = ASK.replace(/搜尋.*$/, '◆ 找不到符合條件的文章。'); }, 30);
-  await p.searched(ASK);  // nothing found: done too (toList reports it)
+  assert.strictEqual(await p.searched(ASK), 'fail');
+  assert.strictEqual(synced, 1, 'no Ctrl-L on 找不到 (it would close the message as any key)');
 });
 
 testAsync('BBS: keys that may leave the screen as it is (End at the newest) wait for PTT\'s redraw (Ctrl-L), not 2 s', async function() {
-  var p = Object.create(JJPtt.prototype), sent = [];
-  p.app = { lastDataAt: 0 };
+  var p = Object.create(JJPtt.prototype), sent = [], fed = [];
+  p.app = { parser: { feed: function(d) { fed.push(d); } } };
   p.connected = function() { return true; };
-  p.send = function(k) { sent.push(k); setTimeout(function() { p.app.lastDataAt = Date.now(); }, 20); };
+  // PTT: an answer of its own (no redraw), then Ctrl-L's whole redraw, in two pieces
+  p.send = function(k) {
+    sent.push(k);
+    setTimeout(function() { p.app.parser.feed('\x1b[?2026h\x1b[5;1H>\x1b[?2026l'); }, 10);
+    setTimeout(function() { p.app.parser.feed('\x1b[?2026h\x1b[H\x1b[2J list'); }, 30);
+    setTimeout(function() { p.app.parser.feed(' rows\x1b[?20'); }, 50);
+    setTimeout(function() { p.app.parser.feed('26l'); }, 70);
+  };
   var t0 = Date.now();
   await p.sendSync('\x1b[4~', 2000);
+  var took = Date.now() - t0;
   assert.deepStrictEqual(sent, ['\x1b[4~\x0c']);
-  assert.ok(Date.now() - t0 < 1000, 'answered: ' + (Date.now() - t0) + ' ms');
+  assert.ok(took >= 60 && took < 1000, 'after the whole redraw, its end split over pieces: ' + took + ' ms');
+  assert.strictEqual(fed.length, 4, 'what PTT sends still goes to the screen');
+});
+
+test('app: each screen\'s load time, once, in the corner (green within a second, orange slower)', function() {
+  assert.strictEqual(JJMobile.loadText(420, '預讀'), '0.42s 預讀');
+  assert.strictEqual(JJMobile.loadText(1234, ''), '1.23s');
+  var m = Object.create(JJMobile.prototype), shown = [];
+  var screen = { openedAt: Date.now() - 1500, loadMs: null };
+  m.stack = [screen];
+  m.showLoadTime = function(s) { shown.push(s.loadMs + ' ' + s.loadHow); };
+  m.loaded(screen, 'BBS');
+  assert.ok(screen.loadMs >= 1500 && screen.loadHow === 'BBS');
+  var first = screen.loadMs;
+  m.loaded(screen, '網頁');
+  assert.strictEqual(screen.loadMs, first, 'the first content counts, not what comes after');
+  assert.strictEqual(shown.length, 1);
+  var below = { openedAt: Date.now(), loadMs: null };
+  m.loaded(below, '網頁');
+  assert.strictEqual(shown.length, 1, 'a screen not on top: kept for when it is back');
+  assert.ok(JJMobile.LOAD_SLOW_MS === 1000);
 });
 
 testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nearest first; an unfinished one is not waited for', async function() {
