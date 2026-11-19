@@ -2743,6 +2743,32 @@ test('app: 熱門看板 rows read from www.ptt.cc', function() {
   assert.deepStrictEqual(JJMobile.parseHot(doc), [['Gossiping', '[八卦] 測試', '9999']]);
 });
 
+test('BBS search: what PTT filled in after the question is erased first', function() {
+  var ask = JJPtt.searchCmd('recommend:100').ask;
+  assert.strictEqual(JJPtt.filledIn('x\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: 10      ', ask), 2);
+  assert.strictEqual(JJPtt.filledIn('x\n搜尋推文數高於多少 (<0則搜噓文數) 的文章:      ', ask), 0);
+  assert.strictEqual(JJPtt.filledIn('x\n 文章列表  (^P)發表', ask), 0, 'no question: nothing');
+  assert.strictEqual(JJPtt.filledIn('x\n[Gossiping] 搜尋標題: 柯文哲', JJPtt.searchCmd('柯').ask), 6, 'double-byte: 2 each');
+});
+
+test('BBS search: 推文數 beyond 100 (止爆 200) as 100, PTT counting no further', function() {
+  assert.strictEqual(JJPtt.searchCmd('recommend:200').text, '100');
+  assert.strictEqual(JJPtt.searchCmd('recommend:-300').text, '-100');
+  assert.strictEqual(JJPtt.searchCmd('recommend:50').text, '50');
+});
+
+testAsync('BBS search: Backspaces before the words though what PTT filled in is not on the screen yet', async function() {
+  var p = Object.create(JJPtt.prototype), keys = [];
+  var now = '【板主:x】  看板《Gossiping》\n 1 a\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: ';
+  p.screen = function() { return now; };
+  p.toBoard = p.wait = function() { return Promise.resolve(); };
+  p.send = function(k) { keys.push(k); };
+  p.type = function(k) { keys.push(k); now = '【板主:x】  系列《Gossiping》\n 1 a\n 系列文章  (y)回應'; };
+  p.searched = function() { return Promise.resolve('done'); };
+  await p.toList('Gossiping', 'recommend:100');
+  assert.deepStrictEqual(keys, ['Z', new Array(JJPtt.SEARCH_ERASE + 1).join('\x7f'), '100\r']);
+});
+
 testAsync('BBS search: done when the list\'s footer is back, not at the echo of the words typed', async function() {
   var ASK = '【板主:x】  看板《Test》\n 1 a\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: ';
   var ECHO = ASK + '10';
