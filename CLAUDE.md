@@ -17,7 +17,7 @@ npx grunt jshint       # lint only (the build fails on any jshint error)
 - Tests load browser sources into Node with `vm` and stubs (`window`, `$`, `lib.store`). Sync tests use `test(...)`; anything async uses `testAsync(...)`, which must be defined *after* `var asyncTests = []` (around the "Android app (lib.openAppPort)" section) or the file crashes at load. A test is also expected to fail on the old code when it guards a fix.
 - **Built files are committed**: `js/pttchrome.min.js`, `css/pttchrome.min.css`, and everything under `extension/`. After changing `js/` or `css/`, run `npm run build` and commit the outputs with the source. `*.concat.*` are gitignored.
 - Android app: `cd mobile && npm ci && node build.js && npx cap sync android`, then `cd android && ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew assembleDebug` (or `assembleRelease`, unsigned). `mobile/build.js` copies the built extension pages into `mobile/www` and writes `build-info.js` (version + `GITHUB_RUN_NUMBER`).
-- Local Android check: emulator AVD `Medium_Phone_API_37.0` in `~/Library/Android/sdk`. Debug builds are debuggable, so the WebView can be driven over CDP (`adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>`); `pttchrome.app.mobile` is the app object.
+- Local Android check: emulator AVD `Medium_Phone_API_37.0` in `~/Library/Android/sdk`. Debug builds are debuggable, so the WebView can be driven over CDP (`adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>`); `pttchrome.app.mobile` is the app object. Helpers in `.claude/tools/`: `emu-cdp.sh "<js>"` evaluates JS in the WebView (via `cdp.mjs`); `emu-pages.js` times the owner's usual pages (load time per page, `JJMobile.loaded`) and `emu-flow.js` runs the Gossiping 爆文 → 止爆 → 噓爆 check, both injected with `emu-cdp.sh "$(cat …)"` (`window.SIM_DOWN` simulates www.ptt.cc being down). A separate emulator may already be logged in to PTT by the owner — never uninstall, clear data or wipe it without asking.
 
 ## Architecture
 
@@ -38,6 +38,8 @@ Both native pieces only allow `ptt.cc` / `ptt2.cc` and fixed ports. `lib.isApp()
 - `push_insights.js` — floor numbers, IP country (`data/geoip-v4.bin`), same-IP, repeat-pusher colours (sets `data-jj-rp` / `--jj-rp`)
 - `fact_check.js` — 真.事實查核 FACT: per-article rules (秒推, 脈衝, 罐頭, 同網段, 機房 via `data/hosting-v4.bin`, 連推…) plus cross-article history (`FactHistory`, 共伴 / 首殺班底) in localStorage
 - `spam_guard.js` — same URL in >3 articles in 24h → temporary blacklist
+
+**Settings sync** (`js/drive_sync.js`, `DriveSync`): settings (blacklist, watchlist, keywords, display options) kept in the user's Google Drive app-data folder (`jjptt-settings.json`); login passwords are never synced.
 
 The lookup tables are generated, not hand-edited: `data/geoip-v4.bin` by `tools/build-geoip.js` (ip-location-db country CSV) and `data/hosting-v4.bin` by `tools/build-hosting.js` (ip-location-db origin-asn); each script's header says where to get the input.
 
@@ -64,4 +66,4 @@ Release APKs are signed by `mobile/android/sign-release.sh` with APK Signature S
 
 ## Project commands
 
-`.claude/commands/`: `/beta` (test build), `/stable` (promote to 正式版, asks first), `/status`, `/check` (lint, tests, build, doc links), `/emu` (debug app on the emulator; CDP helper in `.claude/tools/cdp.mjs`), `/ext-release` (extension version), `/promo` (promo copy), `/fb` (post on the JJptt FB page with a newly drawn GB子 image, optionally scheduled; drawing script `.claude/fb/panels.js`). The owner says 「發測試」 for `/beta` and 「發正式」 for `/stable`.
+`.claude/commands/`: `/beta` (test build), `/stable` (promote to 正式版, asks first), `/status`, `/check` (lint, tests, build, doc links), `/emu` (debug app on the emulator; CDP helper in `.claude/tools/cdp.mjs`), `/ext-release` (extension version), `/promo` (promo copy), `/fb` (post on the JJptt FB page with a newly drawn GB子 image, optionally scheduled; drawing script `.claude/fb/panels.js`). `.claude/skills/zh` (`/zh`) makes replies Taiwan Traditional Chinese. The owner says 「發測試」 for `/beta` and 「發正式」 for `/stable`.
