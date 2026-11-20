@@ -30,7 +30,9 @@ window.__jjPanels = async function (o) {
     p.steps.forEach((s, i) => { step(bx + i * (bw + gap), by, bw, bh, s, i < 2 ? K.term : K[p.last]); if (i < 2) arrow(bx + i * (bw + gap) + bw + 3, by + bh / 2); });
   };
   panel(215, o.top); panel(635, o.bottom);
-  g.textAlign = 'left'; g.font = '500 22px ' + F; g.fillStyle = 'rgba(38,40,68,.75)'; g.fillText('JJptt 看板娘 GB子（AI 生成）', 24, 1062);
+  g.textAlign = 'left'; g.font = '500 22px ' + F;
+  rr(12, 1032, g.measureText('JJptt 看板娘 GB子（AI 生成）').width + 24, 38, 14); g.fillStyle = 'rgba(255,255,255,.85)'; g.fill();
+  g.fillStyle = 'rgba(38,40,68,.9)'; g.fillText('JJptt 看板娘 GB子（AI 生成）', 24, 1062);
   for (let i = 0; i < 54; i++) { g.fillStyle = i % 2 ? '#262844' : '#fff'; g.fillRect(i * 20, 1070, 20, 10); }
   return await new Promise((r) => c.toBlob(r, 'image/png'));
 };
