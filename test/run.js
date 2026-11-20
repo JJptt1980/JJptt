@@ -3100,6 +3100,46 @@ testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the e
   });
 })();
 
+// ---- 使用聲明 shown once on first use (js/notice.js) ---------------------------------
+
+(function() {
+  var store = {};
+  var ctx = vm.createContext({
+    window: { localStorage: { getItem: function(k) { return k in store ? store[k] : null; }, setItem: function(k, v) { store[k] = String(v); } } },
+    lib: { isApp: function() { return false; }, isExtension: function() { return true; } }
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'js/notice.js'), 'utf8'), ctx, { filename: 'js/notice.js' });
+  var N = vm.runInContext('JJPTT_NOTICE', ctx);
+  test('notice: says that more connections may be used to be faster, and that passwords stay here', function() {
+    var all = N.points.map(function(p) { return p.join(' '); }).join('\n');
+    assert.ok(/多開連線/.test(all) && /重複登入/.test(all), all);
+    assert.ok(/密碼/.test(all) && /不會上傳/.test(all), all);
+  });
+  test('notice: the web version gets the relay point, the extension and app do not', function() {
+    assert.strictEqual(N.list().length, N.points.length);
+    ctx.lib.isExtension = function() { return false; };
+    assert.strictEqual(N.list().length, N.points.length + 1);
+    assert.ok(/轉接/.test(N.list().pop()[1]));
+    ctx.lib.isApp = function() { return true; };
+    assert.strictEqual(N.list().length, N.points.length);
+  });
+  test('notice: shown until 我知道了, then not again until its version goes up', function() {
+    assert.strictEqual(N.seen(), false);
+    N.markSeen();
+    assert.strictEqual(N.seen(), true);
+    N.version++;
+    assert.strictEqual(N.seen(), false);
+    N.version--;
+  });
+  test('notice: in the build (Gruntfile concat and jshint), dev.html and 設定 → 關於', function() {
+    var grunt = fs.readFileSync(path.join(root, 'Gruntfile.js'), 'utf8');
+    assert.strictEqual(grunt.split("'js/notice.js'").length - 1, 2);
+    assert.ok(/js\/notice\.js/.test(fs.readFileSync(path.join(root, 'dev.html'), 'utf8')));
+    assert.ok(/id="about_notice"/.test(fs.readFileSync(path.join(root, 'index.html'), 'utf8')));
+    assert.ok(/使用聲明/.test(fs.readFileSync(path.join(root, 'js/mobile_settings.js'), 'utf8')));
+  });
+})();
+
 (async function() {
   for (var i = 0; i < asyncTests.length; ++i) {
     try { await asyncTests[i][1](); passed++; console.log('  ok  ' + asyncTests[i][0]); }
