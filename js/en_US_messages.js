@@ -898,7 +898,7 @@ locale.en_US = {
     "message": "Use the watchlist (tag pushes; the list is kept when off)"
   },
   "options_customListFade": {
-    "message": "Fade pushes from people on the custom list, like the blacklist"
+    "message": "Fade pushes and articles from people on the custom list, like the blacklist"
   },
   "options_customListEnabled": {
     "message": "Use the custom list (tag pushes with the list name; kept when off)"

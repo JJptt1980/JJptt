@@ -156,7 +156,8 @@ JJMobile.prototype.hiddenEntry = function(e) {
   if (!pref) return '';
   var black = pref.enableBlacklist && e.author && pref.isBlacklisted(e.author);
   var kw = (pref.titleKeywords || []).some(function(k) { return k && e.title.indexOf(k) >= 0; });
-  if (!black && !kw) return '';
+  // the custom list (設定: 自訂名單也變暗): faded, never hidden
+  if (!black && !kw) return e.author && pref.fadesNoted && pref.fadesNoted(e.author) ? 'fade' : '';
   // only the automatic blacklist: faded, never hidden
   if (!kw && !pref.hidesBlacklisted(e.author)) return 'fade';
   return pref.hideBlacklisted ? 'hide' : 'fade';

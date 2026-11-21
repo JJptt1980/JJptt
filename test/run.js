@@ -1580,6 +1580,22 @@ test('custom list: the 連推 line shows the list name on the right, like a sing
   assert.ok(/fadesNoted\(id\)/.test(PttReader.prototype.renderPushes.toString()), 'reader does not fade the custom list');
   assert.ok(/fadesNoted\(id\)/.test(JJMobile.prototype.pushInfo.toString()), 'app does not fade the custom list');
 });
+test('custom list faded: articles by people on it are faded in the app list (never hidden), and in the terminal list', function() {
+  var pref = makePref({ customListName: '幹你娘網軍' });
+  pref.notedUserIds = { jganet: '' };
+  var m = Object.create(JJMobile.prototype);
+  m.app = { pref: pref };
+  var e = { author: 'jganet', title: '[新聞] 測試' };
+  assert.strictEqual(m.hiddenEntry(e), '', 'setting off: as before');
+  pref.values.customListFade = true;
+  assert.strictEqual(m.hiddenEntry(e), 'fade');
+  pref.values.hideBlacklisted = true;
+  assert.strictEqual(m.hiddenEntry(e), 'fade', 'never hidden');
+  assert.strictEqual(m.hiddenEntry({ author: 'other', title: 'x' }), '');
+  var tv = fs.readFileSync(path.join(root, 'js/term_view.js'), 'utf8');
+  assert.ok(!/userid && this\.buf\.pageState == 3 && pref\.fadesNoted/.test(tv), 'terminal fades the custom list in articles only');
+  assert.ok(/pref\.enableBlacklist \|\| fadeNoted/.test(tv), 'terminal reads the list row\'s ID only with the blacklist on');
+});
 test('reader: space past the end of the last article goes back to the list, not to the same article in the terminal', function() {
   var sent = [], opened = [];
   var r = Object.create(PttReader.prototype);

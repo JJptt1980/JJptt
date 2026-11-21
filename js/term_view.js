@@ -521,24 +521,25 @@ TermView.prototype = {
 
         // check blacklist for user (and title keywords in lists) and fade row
         var pref = this.bbscore.pref;
-        if (pref.enableBlacklist) {
+        var fadeNoted = !!(pref.values && pref.values.customListFade);
+        if (pref.enableBlacklist || fadeNoted) {
           var rowText = this.buf.getRowText(row, 0, this.buf.cols);
           if (this.buf.pageState == 3) {
             userid = rowText.parsePushthreadForUserId();
           } else if (this.buf.pageState == 2) {
             userid = rowText.parseThreadForUserId();
-            if (userid && pref.titleKeywords.length &&
+            if (userid && pref.enableBlacklist && pref.titleKeywords.length &&
                 rowText.parseThreadTitle().matchesAnyKeyword(pref.titleKeywords)) {
               shouldFade = kwFade = true;
             }
           }
-          if (userid && pref.isBlacklisted(userid)) {
+          if (userid && pref.enableBlacklist && pref.isBlacklisted(userid)) {
             shouldFade = true;
           }
         }
         var blacklistStyle = '';
-        if (!shouldFade && userid && this.buf.pageState == 3 && pref.fadesNoted && pref.fadesNoted(userid)) {
-          blacklistStyle = ' style="opacity:0.2"';  // custom list: faded, never hidden
+        if (!shouldFade && userid && pref.fadesNoted && pref.fadesNoted(userid)) {
+          blacklistStyle = ' style="opacity:0.2"';  // custom list (pushes, list rows): faded, never hidden
         } else if (shouldFade) {
           // the automatic blacklist alone: faded even when 不顯示 is on
           var autoOnly = !kwFade && userid && !pref.hidesBlacklisted(userid);
