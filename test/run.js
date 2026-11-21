@@ -660,8 +660,10 @@ test('app 發表文章: the list is loaded again until www.ptt.cc has the new ar
   assert.ok(JJMobile.isMyArticle({ author: 'MikeEEEE', title: '[測試] JJptt25' }, mine));
   assert.ok(!JJMobile.isMyArticle({ author: 'someone', title: '[測試] JJptt25' }, mine));
   assert.ok(!JJMobile.isMyArticle({ author: 'mikeeeee', title: '[測試] 測測測試' }, mine));
-  var realSetTimeout = global.setTimeout, timers = [];
-  global.setTimeout = function(fn) { timers.push(fn); return timers.length; };
+  var realSetTimeout = global.setTimeout, timers = [], delays = [];
+  global.setTimeout = function(fn, ms) { timers.push(fn); delays.push(ms); return timers.length; };
+  var realNow = Date.now, clock = 1000;
+  Date.now = function() { return clock; };
   try {
     var screen = { entries: [] }, loads = 0;
     var m = { stack: [screen], reload: function(s) {
@@ -672,16 +674,19 @@ test('app 發表文章: the list is loaded again until www.ptt.cc has the new ar
     JJMobile.prototype.reloadAfterArticle.call(m, screen, mine);
     for (var i = 0; i < 50 && timers.length; ++i) timers.shift()();
     assert.strictEqual(loads, 3, 'loaded until the article is there, then stopped');
-    // never there: a few tries, then left alone
+    assert.ok(delays.every(function(ms) { return ms <= 100; }), 'loaded again right away, no waiting between: ' + delays);
+    // never there: loaded again and again, then left alone after POST_WAIT_MS
     var s2 = { entries: [] }, n2 = 0;
-    var m2 = { stack: [s2], reload: function() { n2++; } };
+    var m2 = { stack: [s2], reload: function() { n2++; clock += 500; } };
     timers = [];
     JJMobile.prototype.reloadAfterArticle.call(m2, s2, mine);
-    for (var j = 0; j < 100 && timers.length; ++j) timers.shift()();
-    assert.strictEqual(n2, JJMobile.POST_TRIES + 1);
+    for (var j = 0; j < 1000 && timers.length; ++j) timers.shift()();
+    assert.ok(!timers.length, 'still going');
+    assert.ok(n2 > 50 && n2 <= JJMobile.POST_WAIT_MS / 500 + 2, String(n2));
     assert.ok(/reloadAfterArticle\(/.test(JJMobile.prototype.composeArticle ? JJMobile.prototype.composeArticle.toString() : fs.readFileSync(path.join(root, 'js/mobile_article.js'), 'utf8')), 'not used after 發表文章');
   } finally {
     global.setTimeout = realSetTimeout;
+    Date.now = realNow;
   }
 });
 test('version: JJptt\'s version and the run; before that 0.0.N', function() {
