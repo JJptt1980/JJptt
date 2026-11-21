@@ -226,15 +226,11 @@ String.prototype.parsePushthreadForUserId = function() {
   return null;
 };
 
+// YouTube video id: youtu.be/ID, youtube.com/watch?v=ID (v anywhere in the
+// query), /shorts/ID, /live/ID, /embed/ID, on www., m. or music.
 String.prototype.parseYoutubeUrl = function() {
-  var str = this;
-  var regex = new RegExp(/https?:\/\/(?:(?:youtu\.be\/)|(?:www.youtube.com\/watch\?v=))([\w-]+)/g);
-  var result = regex.exec(str);
-  if (result && result.length == 2) {
-    return result[1];
-  }
-
-  return null;
+  var m = /^https?:\/\/(?:(?:www\.|m\.|music\.)?youtube\.com\/(?:watch\?(?:[^#\s]*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([\w-]{6,})/i.exec(String(this));
+  return m ? m[1] : null;
 };
 
 String.prototype.ansiHalfColorConv = function() {
@@ -289,4 +285,57 @@ String.prototype.repeat = function( num ) {
 
 String.prototype.endsWith = function(suffix) {
   return this.indexOf(suffix, this.length - suffix.length) !== -1;
+};
+
+// A long URL in a push is cut by PTT where the push is full and the rest is
+// pushed by the same user on the next line ("→ id: 83%A0%E6%9A%84/").
+// joins(pushes) finds those and gives, per push index, the whole URL:
+//   { url, first: true }  the push the URL starts in
+//   { url, tail: '...' }  a push that starts with the rest of it
+var SplitUrl = {
+  // user id + content width of a full push (PTT: 45; a little slack for a
+  // full-width character that did not fit at the end)
+  FULL: 44,
+  width: function(s) {
+    var w = 0;
+    for (var i = 0; i < s.length; ++i) w += s.charCodeAt(i) > 0x7f ? 2 : 1;
+    return w;
+  },
+  isFull: function(id, content) {
+    return id.length + SplitUrl.width(String(content).replace(/\s+$/, '')) >= SplitUrl.FULL;
+  },
+  // the URL the content ends with
+  lastUrl: function(content) {
+    var m = /(https?:\/\/[!-~]+)\s*$/.exec(content);
+    return m ? m[1] : '';
+  },
+  // the rest of a URL at the start of a push: URL characters, not a new URL,
+  // and something only a URL has (%, /, =, a digit...) so that a reply such
+  // as "XD" is not taken for one
+  tail: function(content) {
+    var m = /^\s*([A-Za-z0-9%\-._~\/?#&=+:;@!$*,()\[\]']+)/.exec(content);
+    if (!m || /^https?:/i.test(m[1]) || !/[%\/.=&?#_\-\d]/.test(m[1])) return '';
+    return m[1];
+  },
+  joins: function(pushes) {
+    var out = [];
+    for (var i = 0; i < pushes.length; ++i) {
+      if (out[i]) continue;
+      var url = SplitUrl.lastUrl(pushes[i].content);
+      if (!url) continue;
+      var id = pushes[i].id, k = i, tails = [];
+      while (k + 1 < pushes.length && pushes[k + 1].id === id && SplitUrl.isFull(id, pushes[k].content)) {
+        var t = SplitUrl.tail(pushes[k + 1].content);
+        if (!t) break;
+        tails.push({ index: k + 1, tail: t });
+        url += t;
+        ++k;
+        if (t !== String(pushes[k].content).trim()) break;  // the URL ends in this push
+      }
+      if (!tails.length) continue;
+      out[i] = { url: url, first: true };
+      for (var j = 0; j < tails.length; ++j) out[tails[j].index] = { url: url, tail: tails[j].tail };
+    }
+    return out;
+  }
 };

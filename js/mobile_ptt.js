@@ -15,7 +15,11 @@ function JJPtt(app) {
   this.state = 'off';        // off / connecting / in
   this.queue = Promise.resolve();
   this.listeners = [];
+  // kept on the phone: the app may be closed by Android before 設定 is opened
+  try { this.lastFailure = JSON.parse(window.localStorage.getItem(JJPtt.FAIL_KEY) || 'null'); } catch (e) { this.lastFailure = null; }
 }
+
+JJPtt.FAIL_KEY = 'jjptt.m.lastFailure';
 
 JJPtt.STEP_MS = 50;
 JJPtt.KICK_KEY = 'jjptt.m.kickOthers';
@@ -77,10 +81,18 @@ JJPtt.prototype.connected = function() {
 
 // One job at a time, in order. When one fails, the hidden screen at that
 // moment is kept (設定 → 帳號 → 最後一次 PTT 畫面) to see what PTT showed.
-JJPtt.prototype.run = function(job) {
+// bg: a job nobody is waiting for (reading ahead); fgWaiting counts the
+// others still in the queue, so a long background read can give way.
+JJPtt.prototype.run = function(job, bg) {
   var self = this;
-  var p = this.queue.then(job, job).catch(function(err) {
+  var go = job;
+  if (!bg) {
+    this.fgWaiting = (this.fgWaiting || 0) + 1;
+    go = function() { self.fgWaiting--; return job(); };
+  }
+  var p = this.queue.then(go, go).catch(function(err) {
     self.lastFailure = { at: Date.now(), message: (err && err.message) || String(err), screen: self.screen() };
+    try { window.localStorage.setItem(JJPtt.FAIL_KEY, JSON.stringify(self.lastFailure)); } catch (e) {}
     throw err;
   });
   this.queue = p.catch(function() {});
@@ -88,6 +100,95 @@ JJPtt.prototype.run = function(job) {
 };
 
 // ---- the screen ---------------------------------------------------------------------
+
+// Resolves once the screen is the same on two looks in a row (at most `ms`).
+JJPtt.prototype.steady = function(ms) {
+  var self = this;
+  var until = Date.now() + (ms || 300);
+  return new Promise(function(resolve) {
+    var last = self.screen();
+    var tick = function() {
+      var now = self.screen();
+      if (now === last || Date.now() > until) return resolve();
+      last = now;
+      setTimeout(tick, JJPtt.STEP_MS);
+    };
+    setTimeout(tick, JJPtt.STEP_MS);
+  });
+};
+
+// PTT draws each screen inside "synchronized output" marks (ESC[?2026h …
+// ESC[?2026l), and Ctrl-L redraws the whole screen (ESC[2J inside). Counts
+// such whole redraws as they end (app.jjRedrawn): one that ends after keys
+// and a Ctrl-L were sent shows the screen after all of those keys -- the
+// screen read before that could be one PTT had not got to yet (a jump not
+// made, a search still running), and another article was opened.
+JJPtt.prototype.hookRedraws = function() {
+  var app = this.app, parser = app.parser;
+  if (!parser || !parser.feed || parser.jjHooked) return;
+  parser.jjHooked = true;
+  app.jjRedrawn = app.jjRedrawn || 0;
+  var feed = parser.feed, carry = '', cleared = false;
+  parser.feed = function(d) {
+    var r = feed.apply(this, arguments);
+    var text = carry + String(d), re = /\x1b\[2J|\x1b\[\?2026l/g, m;
+    while ((m = re.exec(text))) {
+      if (m.index + m[0].length <= carry.length) continue;  // seen with the last piece
+      if (m[0] === '\x1b[2J') cleared = true;
+      else if (cleared) { cleared = false; app.jjRedrawn++; }
+    }
+    carry = text.slice(-8);
+    return r;
+  };
+};
+
+// Keys, then Ctrl-L: resolves once PTT's whole redraw after them is in
+// (see hookRedraws), so the screen is the one after the keys. Keys that
+// leave the screen as it is (End at the newest, a number already under
+// the cursor) get no answer of their own: waiting for a change took the
+// whole `ms`. No parser to watch (tests): settle().
+JJPtt.prototype.sendSync = function(keys, ms) {
+  var app = this.app, self = this;
+  this.hookRedraws();
+  if (typeof app.jjRedrawn !== 'number') {
+    if (!keys) return Promise.resolve();
+    var prev = this.screen();
+    this.send(keys);
+    return this.settle(prev, ms);
+  }
+  var n0 = app.jjRedrawn, until = Date.now() + (ms || 3000);
+  this.send(keys + '\x0c');
+  return new Promise(function(resolve) {
+    var tick = function() {
+      if (app.jjRedrawn > n0 || Date.now() > until || !self.connected()) {
+        // the screen buffer pairs Big5 bytes into characters 30 ms after
+        // data comes (TermBuf.notify): read now, the rows came out as
+        // bytes (「Re: [·s»D]」) -- pair them first
+        var buf = app.buf;
+        if (buf && buf.timerUpdate && buf.notify) buf.notify();
+        return resolve();
+      }
+      setTimeout(tick, 15);
+    };
+    setTimeout(tick, 15);
+  });
+};
+
+// Resolves once nothing has come from PTT for `ms` (at most `max`): a page
+// arrives in several pieces, more slowly on a phone's network, and one read
+// half drawn mixes rows of two pages. Without lastDataAt: steady().
+JJPtt.prototype.quiet = function(ms, max) {
+  var app = this.app, self = this;
+  if (typeof app.lastDataAt !== 'number') return this.steady(ms);
+  var until = Date.now() + (max || 2000);
+  return new Promise(function(resolve) {
+    var tick = function() {
+      if (Date.now() - app.lastDataAt >= ms || Date.now() > until || !self.connected()) return resolve();
+      setTimeout(tick, JJPtt.STEP_MS);
+    };
+    tick();
+  });
+};
 
 JJPtt.prototype.screen = function() {
   var buf = this.app.buf;
@@ -199,9 +300,23 @@ JJPtt.prototype.connect = function() {
 
 JJPtt.prototype.login = function(user, pass) {
   var self = this;
-  return this.run(function() {
+  var p = this.run(function() {
     return self.doLogin(user, pass);
   });
+  this.waitLogin(p);
+  return p;
+};
+
+// A login on its way (this.loggingIn, settles when it is over either
+// way): pages read on the BBS wait for it instead of failing on 「登入後」
+// in the seconds after the app opens.
+JJPtt.prototype.waitLogin = function(p) {
+  var self = this;
+  var w = Promise.resolve(p).then(function() {}, function() {}).then(function() {
+    if (self.loggingIn === w) self.loggingIn = null;
+  });
+  this.loggingIn = w;
+  return w;
 };
 
 JJPtt.prototype.doLogin = function(user, pass) {
@@ -264,7 +379,7 @@ JJPtt.prototype.doLogin = function(user, pass) {
 
 // After the password: answer what PTT asks until the main menu.
 // Where a login can end besides the main menu (an account's own setting).
-JJPtt.LANDED = /【\s*(分類看板|看板列表|我\s*的\s*最愛|熱門看板)\s*】|看板《[^》]+》|文章選讀/;
+JJPtt.LANDED = /【\s*(分類看板|看板列表|我\s*的\s*最愛|熱門看板)\s*】|(?:看板|系列)《[^》]+》|文章選讀|文章列表|系列文章/;
 
 JJPtt.prototype.pastLogin = function(before, mark, accepted) {
   var self = this;
@@ -391,33 +506,123 @@ JJPtt.prototype.ensureIn = function() {
 
 // ---- getting to an article --------------------------------------------------------------
 
-JJPtt.prototype.toArticle = function(url) {
+// The cursor is then checked (Q: the 文章網址 of the article under it): a
+// list still in a search (a filtered list read on the BBS before) has the
+// AID land on another article nearby, which was opened -- and pushed to --
+// instead. Then out of the search (←) and once more; never the wrong one.
+JJPtt.prototype.toArticle = function(url, again) {
   var self = this;
   var board = JJPtt.boardFromUrl(url);
   var aid = JJPtt.aidFromUrl(url);
   if (!board || !aid) return Promise.reject(new Error('看不懂這篇文章的網址'));
-  var before;
-  return this.toBoard(board).then(function() {
-    // the prompt itself, newly shown (not any 「#」 already on the list)
-    before = self.screen();
+  // # and the AID, the jump done (sendSync), not the echo of the AID
+  var jump = function() {
+    // the prompt itself, newly shown (not any 「#」 already on the list);
+    // an AID typed before it opens is lost
+    var before = self.screen();
     self.send('#');
-    return self.wait({ ask: /文章代碼|AID/ }, 5000, before, '找文章代碼');
-  }).then(function() {
-    self.send(aid + '\r');
-    return JJPtt.sleep(500);
+    return self.wait({ ask: /文章代碼|AID/ }, 5000, before, '找文章代碼').then(function() {
+      return self.sendSync(aid + '\r', 3000);
+    });
+  };
+  return this.toBoard(board).then(function() {
+    // PTT's first jump to an AID often lands a few articles off (in
+    // Gossiping 9 on, every time: 老黃被逼宮 for 蔡英文〈沒有自己的孩子〉),
+    // the second from there is right: jumped twice at once, instead of
+    // jumping, checking, finding it wrong and jumping again
+    return jump();
   }).then(function() {
     if (/找不到這個文章代碼|找不到|沒有這篇/.test(self.screen())) throw new Error('在 PTT 上找不到這篇文章');
+    return jump();
+  }).then(function() {
+    return self.sendSync('', 3000);  // after everything (see sendSync)
+  }).then(function() {
+    if (/找不到這個文章代碼|找不到|沒有這篇/.test(self.screen())) throw new Error('在 PTT 上找不到這篇文章');
+    return self.urlHere();
+  }).then(function(here) {
+    if (JJPtt.sameArticle(here, url)) return;
+    console.log('JJptt BBS 文章代碼跳到別篇', url, here);
+    if (again) throw new Error('PTT 跳到別篇文章了，請再試一次');
+    // out of a search (系列文章) first; ← in the whole list would leave the board
+    if (self.listFoot() !== 'search') return self.toArticle(url, true);
+    var prev = self.screen();
+    self.send('\x1b[D');
+    self.listQuery = '';
+    return self.settle(prev, 2000).then(function() { return self.toArticle(url, true); });
   });
+};
+
+// The 文章網址 of the article under the list's cursor (Q, then any key
+// closes the box).
+JJPtt.prototype.urlHere = function() {
+  var self = this, here = '';
+  var prev = this.screen();
+  this.send('Q');
+  return this.wait({ url: JJPtt.URL_IN_BOX }, 5000, prev, '找文章網址').then(function() {
+    here = JJPtt.URL_IN_BOX.exec(self.screen())[0].replace(/^http:/, 'https:');
+    var p2 = self.screen();
+    self.send(' ');
+    return self.settle(p2, 1500);
+  }).then(function() { return here; });
+};
+
+// Two www.ptt.cc addresses of the same article (http / https, ?query aside).
+JJPtt.sameArticle = function(a, b) {
+  var key = function(u) {
+    var m = /\/bbs\/([\w\-]+)\/([MG]\.\d+\.A\.[0-9A-Fa-f]+)\.html/.exec(u || '');
+    return m ? (m[1] + '/' + m[2]).toLowerCase() : '';
+  };
+  return !!key(a) && key(a) === key(b);
+};
+
+// A question PTT left open on the bottom line (a push's text or its
+// 確定 [y/N], the AID or board-name prompt): keys typed now would go into it.
+JJPtt.PROMPT = /\[y\/n\]|(推|噓|→)\s*\w+\s*[:：]|請輸入|文章代碼|\(AID\)|[:：]\s*$/i;
+
+// Empties and closes such a question (backspaces, then Enter: an empty push
+// or name is cancelled, Enter at [y/N] is No).
+JJPtt.prototype.clearPrompt = function() {
+  var lines = this.screen().split('\n').filter(function(l) { return l.trim(); });
+  if (!JJPtt.PROMPT.test(lines[lines.length - 1] || '')) return Promise.resolve();
+  var before = this.screen();
+  this.send(new Array(81).join('\b') + '\r');
+  return this.settle(before, 1500);
 };
 
 // Into a board's article list.
 JJPtt.prototype.toBoard = function(board) {
   var self = this;
   if (!/^[A-Za-z0-9_\-]{1,20}$/.test(board || '')) return Promise.reject(new Error('看板名稱不對'));
+  // already in its article list (e.g. back from the last article read)
+  // -- inside a search there, ← goes back to the whole list (pttbbs
+  // read_cmd_quit: all conditions at once)
+  // The list's footer tells which: 「文章列表」 the whole list, 「系列文章」
+  // a search (what this.listQuery says can be out of date: a job stopped
+  // half way, an error) -- and s into the same board keeps the search, so
+  // the next search was added to it (找不到符合條件的文章) and an AID
+  // landed on an article nearby. depth: ← at most a few times.
+  var depth = arguments[1] || 0;
+  if (this.inList(board)) {
+    var foot = this.listFoot();
+    if (foot !== 'search' && (foot === 'list' || !this.listQuery)) { this.listQuery = ''; return Promise.resolve(); }
+    var prev0 = this.screen();
+    this.send('\x1b[D');
+    this.listQuery = '';
+    return this.settle(prev0, 2000).then(function() {
+      if (depth < 3) return self.toBoard(board, depth + 1);
+    });
+  }
+  this.listQuery = '';
   // out of an article, then "s" (select board) -- which only works in a
   // list, not in the main menu: from there, 我的最愛 first
-  if (/瀏覽 第|\(y\)回應/.test(this.screen())) this.send('q');
-  return JJPtt.sleep(200).then(function() {
+  return this.clearPrompt().then(function() {
+    // an article (a board list's footer says (y)回應 too: stay there)
+    var now = self.screen();
+    if (/瀏覽 第/.test(now) || (/\(y\)回應/.test(now) && !/文章選讀|文章列表|系列文章/.test(now))) {
+      self.send('q');
+      return self.settle(now, 1000);
+    }
+  }).then(function() {
     if (/【\s*主功能表\s*】|主功能表/.test(self.screen())) return self.enterFavorites();
   }).then(function() {
     // only PTT's own prompt, newly on the screen: a board list's header
@@ -425,11 +630,11 @@ JJPtt.prototype.toBoard = function(board) {
     // opens is thrown away (pushes failed with 「進 Gossiping 板」)
     var before = self.screen();
     self.send('s');
-    return self.wait({ ask: /請輸入看板名稱/ }, 8000, before, '按 s 選看板');
+    return self.wait({ ask: /請輸入看板名稱/ }, 8000, before, '開啟看板選單');
   }).then(function() {
     self.type(board + '\r');
     var name = board.replace(/[^\w-]/g, '');
-    var boardRe = new RegExp('看板《' + name + '》', 'i');
+    var boardRe = new RegExp('(?:看板|系列)《' + name + '》', 'i');
     // in 我的最愛 / 看板列表, s only moves the cursor onto the board: → goes in
     var cursorRe = new RegExp('^\\s*>\\s*\\d+\\s+[ˇ∨\\s]?\\s*' + name + '\\s', 'mi');
     var until = Date.now() + 15000, moved = 0;
@@ -440,7 +645,7 @@ JJPtt.prototype.toBoard = function(board) {
         hurdle: /按任意鍵|請按任意鍵|按任一鍵/,
         // the board's own article list (its header names the 板主); a
         // board list's header can name the board under the cursor too
-        inboard: /【\s*板主|文章選讀/,
+        inboard: /【\s*板主|文章選讀|文章列表|系列文章/,
         cursor: cursorRe
       }, 10000, undefined, '進 ' + board + ' 板').then(function(k) {
         if (k === 'none') throw new Error('沒有 ' + board + ' 這個看板');
@@ -462,6 +667,9 @@ JJPtt.prototype.toBoard = function(board) {
       });
     };
     return step();
+  }).then(function() {
+    // in, but still in the search it was in before (s keeps it)
+    if (self.listFoot() === 'search' && depth < 3) return self.toBoard(board, depth + 1);
   });
 };
 
@@ -511,7 +719,7 @@ JJPtt.prototype.typeAndSave = function(lines, endWithNewline) {
       done: /順利貼出|貼出佈告|文章已發表/,
       sign: /請選擇簽名檔/,
       hurdle: /按任意鍵|請按任意鍵/,
-      list: /文章選讀|看板《/
+      list: /文章選讀|文章列表|系列文章|看板《/
     }, function(k) {
       if (k === 'no') throw new Error('這個板不能發文');
       if (k === 'done' || k === 'list') {
@@ -533,7 +741,8 @@ JJPtt.prototype.push = function(url, kind, text) {
     return self.ensureIn().then(function() {
       return self.toArticle(url);
     }).then(function() {
-      // only PTT's answer, newly on the screen (not a line already there)
+      // only what PTT newly shows counts: an old push line or the list's
+      // header (看板《…》) is not its answer
       var before = self.screen();
       self.send('X');
       return self.wait({
@@ -554,11 +763,15 @@ JJPtt.prototype.push = function(url, kind, text) {
     }).then(function(k) {
       if (k === 'no') throw new Error('這篇文章不能用這種方式推文');
       return self.typePush(text);
-    }).then(function() {
-      return self.wait({ confirm: /確定\s*\[y\/N\]|確定要/i, done: /文章選讀|看板《/ }, 8000, undefined, '送出推文');
+    }).then(function(before) {
+      // the list header says 看板《…》 all along: only its footer coming
+      // back (文章選讀) or the 確定 question is PTT's answer
+      return self.wait({ confirm: /確定.*\[y\/n\]|確定要/i, done: /文章選讀|文章列表|系列文章/ }, 8000, before, '送出推文');
     }).then(function(k) {
-      if (k === 'confirm') self.send('y\r');
-      return JJPtt.sleep(600);
+      if (k !== 'confirm') return;
+      return self.confirmPush();
+    }).then(function() {
+      return JJPtt.sleep(300);
     });
   });
 };
@@ -595,8 +808,9 @@ JJPtt.prototype.typePush = function(text) {
     return echoed().then(function(got) {
       if (got === '') throw new Error('PTT 的推文欄沒有出現打的字，這次沒有送出');
       if (got === null || same(got, text)) {  // null: no input line to read, as before
+        var beforeEnter = self.screen();
         self.send('\r');
-        return;
+        return beforeEnter;  // what PTT answers is what changes after this
       }
       note('推文欄變成「' + got + '」，和打的「' + text + '」不同');
       self.send(erase(got));
@@ -622,6 +836,40 @@ JJPtt.pushInputLeft = function(screen, user) {
     if (m && (!id || m[1].toLowerCase() === id)) left = m[2].trim();
   });
   return left;
+};
+
+// The bottom line with something on it.
+JJPtt.prototype.lastLine = function() {
+  var lines = this.screen().split('\n').filter(function(l) { return l.trim(); });
+  return (lines[lines.length - 1] || '').trim();
+};
+
+JJPtt.CONFIRM = /確定.*\[y\/n\]|確定要/i;
+
+// Answers the push's 確定 question. PTT's answer can be the list again
+// (文章選讀), the article (瀏覽 第: when the question took y alone, the
+// Enter opened it), a message to get past, or just the question gone from
+// the bottom line; a refusal (推文太快…) is passed on in PTT's words.
+JJPtt.prototype.confirmPush = function() {
+  var self = this;
+  var before = this.screen();
+  var lastBefore = this.lastLine();
+  this.send('y\r');
+  // only the bottom line, newly changed: an article's own text is not PTT's answer
+  var bottom = function(re) {
+    return { test: function() { var l = self.lastLine(); return l !== lastBefore && re.test(l); } };
+  };
+  return this.wait({
+    no: bottom(/太快|間隔|禁止|無法|不能|失敗|權限/),
+    hurdle: bottom(/按任意鍵|請按任意鍵|按任一鍵/),
+    done: /文章選讀|文章列表|系列文章|瀏覽 第/,
+    gone: { test: function() { return self.screen() !== before && !JJPtt.CONFIRM.test(self.lastLine()); } }
+  }, 8000, before, '確定推文').then(function(k) {
+    if (k === 'no') throw new Error('PTT 沒讓這則推文出去：' + self.lastLine().replace(/\s+/g, ' ').slice(0, 40));
+    if (k === 'hurdle') self.send(' ');
+  }, function() {
+    throw new Error('不確定有沒有推出去，請重新整理看看（PTT 最後一行：' + self.lastLine().replace(/\s+/g, ' ').slice(0, 30) + '）');
+  });
 };
 
 // ---- reply (回文到看板) -------------------------------------------------------------------------
@@ -777,12 +1025,17 @@ JJPtt.prototype.toMenu = function() {
 // (its F item), so this waits for the board list's column header among what
 // changed. A menu letter may only move the cursor there: then → goes in.
 JJPtt.LIST_HEAD = /編號.*看\s*板|看\s*板.*類別|類別.*轉信/;
+// f in the main menu only moves its cursor onto (F)avorite here, → goes in:
+// once PTT has taken the f (a whole redraw after it), → at once -- waiting
+// 2.5 s to see whether f went in by itself held up the first board opened.
 JJPtt.prototype.enterFavorites = function() {
   var self = this;
   var before = this.screen();
-  this.send('f');
-  return this.wait({ list: JJPtt.LIST_HEAD }, 2500, before).catch(function() {
-    if (!/主功能表/.test(self.screen())) throw new Error('進不了我的最愛');
+  return this.sendSync('f', 2500).then(function() {
+    if (JJPtt.LIST_HEAD.test(self.screen()) && !/主功能表/.test(self.screen())) return 'list';
+    if (!/主功能表/.test(self.screen())) {
+      return self.wait({ list: JJPtt.LIST_HEAD }, 2500, before).catch(function() { throw new Error('進不了我的最愛'); });
+    }
     self.send('\x1b[C');
     return self.wait({ list: JJPtt.LIST_HEAD }, 8000, before, '進我的最愛');
   });
@@ -798,9 +1051,17 @@ JJPtt.parseFolderRow = function(row) {
 // The account's 我的最愛, in PTT's order, with the boards inside its folders
 // (each with `folder`: the folder's name):
 //   [{ name, title }, { name, title, folder: 'MLB' }, ...]
-JJPtt.prototype.favorites = function() {
+// opts.bg: the sync after logging in, which gives way (err.yielded, between
+// pages and folders) to what the user opens meanwhile -- it took the
+// connection for 2-3 s right when the first board was opened.
+JJPtt.prototype.favorites = function(opts) {
   var self = this;
+  var bg = !!(opts && opts.bg);
+  var giveWay = function() {
+    if (bg && self.fgWaiting > 0) { var e = new Error('讓給前面的工作'); e.yielded = true; throw e; }
+  };
   return this.run(function() {
+    giveWay();
     var out = [];
     // one list (我的最愛 or a folder), every page; folders found are
     // returned with where they were, to be read afterwards
@@ -825,6 +1086,7 @@ JJPtt.prototype.favorites = function() {
         return first;
       };
       var page = function() {
+        giveWay();
         var first = read();
         if (first === lastFirst || ++pages > 30) return Promise.resolve({ boards: boards, folders: folders });
         lastFirst = first;
@@ -869,6 +1131,7 @@ JJPtt.prototype.favorites = function() {
       var inside = [];
       var next = function(i) {
         if (i >= top.folders.length) return Promise.resolve();
+        giveWay();
         return readFolder(top.folders[i]).then(function(b) {
           inside[i] = b;
           return next(i + 1);
@@ -887,5 +1150,556 @@ JJPtt.prototype.favorites = function() {
       self.send('\x1b[D');  // leave the list
       return out;
     });
+  }, bg);
+};
+
+// ---- reading through the connection when www.ptt.cc is down --------------------------------
+// PTT's web pages (www.ptt.cc) sometimes fail (HTTP 500) while the BBS
+// itself works. Then the board list and the articles are read from the BBS
+// screen and turned into the same HTML as the web pages, so the rest of the
+// app is unchanged (PttReader.termDoc). Addresses used instead of web pages:
+//   jjterm:list/<board>/<before>   the articles numbered below <before> (0: the newest)
+//   jjterm:art/<board>/<number>    article <number> of the board
+//   jjterm:search/<board>/<before>/<query>   PTT's own search (JJPtt.searchCmd);
+//     numbers in it are the search list's own, so its articles are
+//   jjterm:art/<board>/<number>/<query>      opened from inside that search
+
+JJPtt.TERM = 'jjterm:';
+JJPtt.isTermUrl = function(url) {
+  return String(url || '').indexOf(JJPtt.TERM) === 0;
+};
+
+// One row of a board's article list:
+// "  12345 + 311/19 someone      □ [問卦] title" ->
+// { num, nrec, date, author, title, deleted }; 置底 (★) rows give num 0.
+// PTT's columns have fixed widths (pttbbs bbs_coldefs): number 6, then
+// " " + mark + 推文數 in exactly 2 columns (" 3", "10", 爆, XX, X1, --),
+// then the date with no space before it -- "+ 311/19" is 3 pushes on
+// 11/19, not 31 on 1/19.
+JJPtt.parseArticleRow = function(row) {
+  var m = /^[>●\s]?\s*(\d+|★)\s([+mMsSD*!=~ ])(爆|XX|X\d|\d\d| \d|--|  )?\s*(\d{1,2}\/\d{2}) (\S+) +(□|轉|R:?)\s?(.*)$/.exec(String(row || ''));
+  if (!m) return null;
+  var title = m[7].replace(/\s+$/, '');
+  if (m[6] === '轉') title = 'Fw: ' + title;
+  else if (m[6] !== '□') title = 'Re: ' + title;
+  var nrec = (m[3] || '').trim();
+  return {
+    num: m[1] === '★' ? 0 : +m[1],
+    nrec: nrec === '--' ? '' : nrec,
+    date: m[4],
+    author: m[5] === '-' ? '-' : m[5],
+    title: title,
+    deleted: m[5] === '-' || /^\(本文已被刪除\)/.test(m[7])
+  };
+};
+
+JJPtt.esc = function(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+};
+
+// www.ptt.cc's search?q= ("author:x", "recommend:n" -- n < 0: 噓 --, or
+// words of the title) as PTT's own search in a board's list: the key, the
+// prompt it answers to (「搜尋作者: 」, or 「增加條件 作者: 」 inside a
+// search) and what to type.
+JJPtt.searchCmd = function(q) {
+  q = String(q || '').trim();
+  var m;
+  if ((m = /^author:\s*(\S+)$/.exec(q))) return { key: 'a', ask: /(搜尋|增加條件) ?作者/, text: m[1] };
+  // PTT counts pushes up to 100 (爆): 200 (止爆) found nothing on the BBS,
+  // where www.ptt.cc gives the 爆 ones
+  if ((m = /^recommend:\s*(-?\d+)$/.exec(q))) return +m[1] ? { key: 'Z', ask: /搜尋推文數|增加條件 ?推文數/, text: String(Math.max(-100, Math.min(100, +m[1]))) } : null;
+  return q ? { key: '/', ask: /(搜尋|增加條件) ?標題/, text: q } : null;
+};
+
+// A board index page like www.ptt.cc's (what JJMobile.parseIndex reads);
+// query: rows from that search (their links open the article inside it).
+JJPtt.indexHtml = function(board, rows, older, query) {
+  var esc = JJPtt.esc;
+  var h = ['<div id="topbar"><a class="board">看板 ' + esc(board) + '</a></div><div class="btn-group-paging">'];
+  if (older) h.push('<a class="btn" href="' + esc(older) + '">‹ 上頁</a>');
+  h.push('</div><div class="r-list-container">');
+  var tail = query ? '/' + encodeURIComponent(query) : '';
+  rows.forEach(function(r) {
+    var t = r.deleted ? esc(r.title) : '<a href="' + esc(JJPtt.TERM + 'art/' + encodeURIComponent(board) + '/' + r.num + tail +
+      JJPtt.wantHash(r)) + '">' + esc(r.title) + '</a>';
+    h.push('<div class="r-ent"><div class="nrec">' + esc(r.nrec) + '</div><div class="title">' + t +
+      '</div><div class="meta"><div class="author">' + esc(r.author) + '</div><div class="date">' + esc(r.date) + '</div></div></div>');
   });
+  h.push('</div>');
+  return h.join('');
+};
+
+// A list row's author and title after the article's address (#author/title):
+// opening it checks that the number still lands on that article -- PTT's
+// list may have changed since (a search redone, other conditions on it), and
+// a number alone then opens another one. JJPtt.wantFromUrl reads it back.
+JJPtt.wantHash = function(r) {
+  return r && r.author && r.title ? '#' + encodeURIComponent(r.author) + '/' + encodeURIComponent(r.title) : '';
+};
+JJPtt.wantFromUrl = function(url) {
+  var m = /#([^\/#]+)\/([^#]+)$/.exec(String(url || ''));
+  if (!m) return null;
+  try {
+    return { author: decodeURIComponent(m[1]), title: decodeURIComponent(m[2]) };
+  } catch (e) { return null; }
+};
+
+// The article's lines as read from the screen -> an article page like
+// www.ptt.cc's (#main-content with the header lines and .push lines).
+JJPtt.PUSH_LINE = /^(推|噓|→) ?(\w+)\s*:(.*?)\s*((?:\d{1,3}\.){3}\d{1,3})?\s*(\d{1,2}\/\d{1,2}(?:\s+\d{1,2}:\d{2})?)\s*$/;
+JJPtt.articleHtml = function(lines) {
+  var esc = JJPtt.esc;
+  var link = function(s) {
+    return esc(s).replace(/https?:\/\/[^\s<>"]+/g, function(u) { return '<a href="' + u + '">' + u + '</a>'; });
+  };
+  var meta = [], i = 0;
+  for (; i < Math.min(lines.length, 6); ++i) {
+    var l = lines[i] || '';
+    var m = /^\s*作者\s+(.+?)(?:\s{2,}看板\s+(\S+))?\s*$/.exec(l);
+    if (m) {
+      meta.push('<div class="article-metaline"><span class="article-meta-tag">作者</span><span class="article-meta-value">' + esc(m[1].trim()) + '</span></div>');
+      if (m[2]) meta.push('<div class="article-metaline-right"><span class="article-meta-tag">看板</span><span class="article-meta-value">' + esc(m[2]) + '</span></div>');
+      continue;
+    }
+    m = /^\s*(標題|時間)\s+(.*?)\s*$/.exec(l);
+    if (m) {
+      meta.push('<div class="article-metaline"><span class="article-meta-tag">' + m[1] + '</span><span class="article-meta-value">' + esc(m[2]) + '</span></div>');
+      continue;
+    }
+    if (/^\s*[─-]{10,}\s*$/.test(l)) ++i;
+    break;
+  }
+  var body = [];
+  for (; i < lines.length; ++i) {
+    var line = lines[i] || '';
+    var p = JJPtt.PUSH_LINE.exec(line);
+    if (p) {
+      body.push('<div class="push"><span class="push-tag">' + p[1] + ' </span><span class="push-userid">' + esc(p[2]) +
+        '</span><span class="push-content">: ' + link(p[3].trim()) + '</span><span class="push-ipdatetime"> ' +
+        (p[4] ? p[4] + ' ' : '') + p[5] + '\n</span></div>');
+    } else {
+      body.push((lines.html && lines.html[i] != null ? lines.html[i] : link(line)) + '\n');
+    }
+  }
+  return '<div id="main-content">' + meta.join('') + body.join('') + '</div>';
+};
+
+// One screen row with its colours, as www.ptt.cc marks them (span class
+// "f3 hl b4"; default white on black stays plain), URLs as links. A
+// double-byte character takes its lead byte's colours; trailing blanks on
+// black are dropped like the plain text's.
+JJPtt.rowHtml = function(buf, row) {
+  var line = buf.lines && buf.lines[row];
+  if (!line) return undefined;  // no colours known: the plain text is used
+  var cols = Math.min(buf.cols || line.length, line.length);
+  var segs = [], cur = null;
+  for (var c = 0; c < cols; ++c) {
+    var ch = line[c];
+    var w = ch.isLeadByte && c + 1 < cols ? 2 : 1;
+    var text = w === 2 ? buf.getRowText(row, c, c + 2) : (ch.ch || ' ');
+    var fg = ch.invert ? ch.bg : ch.fg, bg = ch.invert ? ch.fg : ch.bg;
+    var key = (fg === 7 && bg === 0 && !ch.bright) ? '' : 'f' + fg + (ch.bright ? ' hl' : '') + ' b' + bg;
+    if (!cur || cur.key !== key) segs.push(cur = { key: key, text: '' });
+    cur.text += text;
+    c += w - 1;
+  }
+  while (segs.length) {
+    var last = segs[segs.length - 1];
+    if (/ b[1-7]$/.test(last.key)) break;
+    last.text = last.text.replace(/\s+$/, '');
+    if (last.text) break;
+    segs.pop();
+  }
+  var link = function(s) {
+    return JJPtt.esc(s).replace(/https?:\/\/[^\s<>"&]+/g, function(u) { return '<a href="' + u + '">' + u + '</a>'; });
+  };
+  return segs.map(function(s) {
+    return s.key ? '<span class="' + s.key + '">' + link(s.text) + '</span>' : link(s.text);
+  }).join('');
+};
+
+// A board's article list, one screen: the newest, or those below `before`;
+// with query, that search's (JJPtt.searchCmd), newest first like
+// www.ptt.cc's search pages. Resolves with an index page's HTML
+// (JJPtt.indexHtml).
+JJPtt.prototype.boardPage = function(board, before, query) {
+  var self = this;
+  var none = {};
+  return this.run(function() {
+    return self.ensureIn().then(function() {
+      return self.toList(board, query).catch(function(e) {
+        if (e && e.searchEmpty) throw none;  // an empty list, not an error
+        throw e;
+      });
+    }).then(function() {
+      // a number then Enter jumps there; End: the newest article
+      return self.sendSync(before > 1 ? String(before - 1) + '\r' : '\x1b[4~', 2000);
+    }).then(function() {
+      var buf = self.app.buf, rows = [], low = 0;
+      for (var r = 1; r < (buf.rows || 24) - 1; ++r) {
+        var a = JJPtt.parseArticleRow(buf.getRowText(r, 0, buf.cols));
+        if (!a || !a.num || (before && a.num >= before)) continue;  // 置底 have no number to open
+        rows.push(a);
+        if (!low || a.num < low) low = a.num;
+      }
+      var older = low > 1 ? JJPtt.TERM + (query ? 'search/' : 'list/') + encodeURIComponent(board) + '/' + low +
+        (query ? '/' + encodeURIComponent(query) : '') : '';
+      if (query) rows.reverse();
+      return JJPtt.indexHtml(board, rows, older, query);
+    }).catch(function(e) {
+      if (e === none) return JJPtt.indexHtml(board, [], '', query);
+      throw e;
+    });
+  });
+};
+
+// Into a board's article list as toBoard does, then PTT's own search
+// `query` (JJPtt.searchCmd) -- or out of any search when there is none.
+// this.listQuery: the search the list is in now ('' none).
+JJPtt.prototype.toList = function(board, query) {
+  var self = this;
+  var cmd = JJPtt.searchCmd(query);
+  query = cmd ? String(query).trim() : '';
+  if (query && this.listQuery === query && this.inList(board) && this.listFoot() !== 'list') return Promise.resolve();
+  return this.toBoard(board).then(function() {
+    if (!cmd) return;
+    var prev = self.screen();
+    self.send(cmd.key);
+    return self.wait({ ask: cmd.ask }, 5000, prev, '搜尋').then(function() {
+      // PTT fills in the last one asked (「…的文章: 10」): typed after it,
+      // 100 was 10100 (找不到) and -100 another search -- erased first.
+      // Often not on the screen yet when the question is: Backspaces
+      // enough for it anyway (on an empty answer they do nothing)
+      var n = Math.max(JJPtt.filledIn(self.screen(), cmd.ask), JJPtt.SEARCH_ERASE);
+      self.send(new Array(n + 1).join('\x7f'));
+      var p2 = self.screen();
+      self.type(cmd.text + '\r');
+      return self.searched(p2);
+    }).then(function() {
+      // nothing found, or not searched (pttbbs select_read): a message to
+      // close, and the whole list still there -- not the search's
+      var said = JJPtt.SEARCH_FAIL.exec(self.screen());
+      // a search shows 系列文章; the whole list still there: nothing found
+      // (its message closed by the redraw's Ctrl-L)
+      if (!said && self.listFoot() === 'list') {
+        var e0 = new Error('找不到符合條件的文章');
+        e0.searchEmpty = true;
+        throw e0;
+      }
+      if (!said) { self.listQuery = query; return; }
+      var p3 = self.screen();
+      self.send(' ');
+      return self.settle(p3, 1500).then(function() {
+        var e = new Error(/找不到/.test(said[0]) ? '找不到符合條件的文章' :
+          /未搜尋/.test(said[0]) ? 'PTT 暫時不讓搜尋（太頻繁），請過一陣子再試' : 'PTT ' + said[0].replace(/[。\s]+$/, ''));
+        e.searchEmpty = /找不到/.test(said[0]);
+        throw e;
+      });
+    });
+  });
+};
+// What PTT filled in after the question `ask` on the screen's last line
+// (the last answer to it), in Backspaces to erase it: 2 for a double-byte
+// character, more erasing nothing.
+JJPtt.SEARCH_ERASE = 40;
+JJPtt.filledIn = function(screen, ask) {
+  var lines = String(screen || '').split('\n').filter(function(l) { return l.trim(); });
+  var last = lines[lines.length - 1] || '';
+  var m = ask.exec(last);
+  if (!m) return 0;
+  var rest = last.slice(m.index + m[0].length);
+  var c = rest.indexOf(':');
+  if (c < 0) return 0;
+  var text = rest.slice(c + 1).trim(), n = 0;
+  for (var i = 0; i < text.length; ++i) n += text.charCodeAt(i) > 0x7f ? 2 : 1;
+  return n;
+};
+JJPtt.SEARCH_FAIL = /找不到符合條件的文章|搜尋服務異常[^\n]*|已達搜尋條件上限|未搜尋/;
+
+// After a search's words and Enter: done once the list's footer is back at
+// the bottom (or PTT says it found nothing) -- not when the screen first
+// changes, which is only the echo of the words typed (「…的文章: 10」):
+// the search itself takes PTT a moment more, and the keys sent meanwhile
+// went into the question or were lost (searches piled up, 找不到, another
+// article opened).
+// The footer can come back before the search is over (the question
+// closed first): then a whole redraw (sendSync) to read the list after it.
+// Its Ctrl-L would close PTT's 找不到 message as any key: not when that
+// is on the screen already. Resolves 'fail' / 'done'.
+JJPtt.prototype.searched = function(prev) {
+  var self = this;
+  return this.wait({ fail: JJPtt.SEARCH_FAIL, done: /文章選讀|文章列表|系列文章/ }, 10000, prev, '搜尋').then(function(k) {
+    if (k === 'fail') return k;
+    return self.sendSync('', 3000).then(function() { return k; });
+  });
+};
+
+// The list's footer: 'list' (文章列表, the whole list), 'search' (系列文章),
+// or '' (another footer, e.g. 文章選讀, or none).
+JJPtt.prototype.listFoot = function() {
+  var lines = this.screen().split('\n').filter(function(l) { return l.trim(); });
+  var last = lines[lines.length - 1] || '';
+  return /系列文章/.test(last) ? 'search' : /文章列表/.test(last) ? 'list' : '';
+};
+
+// In `board`'s article list (a search in it too), nothing asked at the bottom.
+JJPtt.prototype.inList = function(board) {
+  var here = this.screen(), lines = here.split('\n').filter(function(l) { return l.trim(); });
+  return new RegExp('(?:看板|系列)《' + board + '》', 'i').test(here) && /文章選讀|文章列表|系列文章/.test(here) && !/瀏覽 第/.test(here) &&
+    !JJPtt.PROMPT.test(lines[lines.length - 1] || '');
+};
+
+// The article under the cursor in the list, every page of it, as lines;
+// back to the list afterwards.
+JJPtt.prototype.readHere = function(onPage) {
+  var self = this;
+  var before = this.screen();
+  this.send('\r');
+  return this.wait({ article: /瀏覽 第/, gone: /本文已被刪除|找不到/ }, 8000, before, '打開文章').then(function(k) {
+    if (k === 'gone') throw new Error('這篇文章已經被刪除了');
+    return self.readPages(onPage);
+  }).then(function(lines) {
+    var prev = self.screen();
+    self.send('q');
+    return self.settle(prev, 1500).then(function() { return lines; });
+  });
+};
+
+// The article open on the screen, from its first page (Home first when
+// it is further down) to the last by Page Down, as lines. onPage(page,
+// pages, lines so far) after each page read; false from it stops there
+// (lines.stopped).
+JJPtt.prototype.readPages = function(onPage) {
+  var self = this;
+  var lines = [], pages = 0;
+  lines.html = [];  // the same lines with their colours (JJPtt.rowHtml)
+  var read = function() {
+    var buf = self.app.buf, n = buf.rows || 24;
+    var st = buf.getRowText(n - 1, 0, buf.cols).parseStatusRow();
+    if (!st) return null;
+    for (var r = 0; r < n - 1 && st.rowIndexStart + r <= st.rowIndexEnd; ++r) {
+      lines[st.rowIndexStart - 1 + r] = buf.getRowText(r, 0, buf.cols).replace(/\s+$/, '');
+      lines.html[st.rowIndexStart - 1 + r] = JJPtt.rowHtml(buf, r);
+    }
+    return st;
+  };
+  var lastStart = 0, tries = 0;
+  var page = function() {
+    // PTT draws in pieces: read once nothing more comes and the screen
+    // holds still -- and only a new page (its status line moved on). The
+    // status line comes last (pmore draws the page, then its footer), so a
+    // new one there means the page is all in: read at once (each page
+    // waited 150 ms more, about a second for an article of five pages)
+    var st0 = status();
+    var whole = st0 && st0.rowIndexStart !== lastStart;
+    return (whole ? Promise.resolve() : self.quiet(150, 2000).then(function() { return self.steady(300); })).then(function() {
+      var st = status();
+      if (st && lastStart && st.rowIndexStart === lastStart && st.pagePercent < 100 && ++tries < 20) {
+        return JJPtt.sleep(100).then(page);
+      }
+      tries = 0;
+      st = read();
+      if (!st) throw new Error('PTT 沒有打開這篇文章');
+      lastStart = st.rowIndexStart;
+      if (onPage && onPage(st.pageIndex, st.pageTotal || st.pageIndex, lines) === false) {
+        lines.stopped = true;
+        return;
+      }
+      if (st.pagePercent >= 100 || ++pages > 300) return;
+      var prev = self.screen();
+      self.send('\x1b[6~');  // Page Down
+      return self.wait({ next: /瀏覽 第/ }, 8000, prev, '讀下一頁').then(page);
+    });
+  };
+  var status = function() {
+    var buf = self.app.buf;
+    return buf.getRowText((buf.rows || 24) - 1, 0, buf.cols).parseStatusRow();
+  };
+  var st = status();
+  var start = Promise.resolve();
+  if (st && st.rowIndexStart > 1) {
+    var prev = this.screen();
+    this.send('\x1b[1~');  // Home: the first page
+    start = this.wait({ top: /目前顯示: 第 0*1~/ }, 5000, prev, '回到第一頁');
+  }
+  return start.then(page).then(function() {
+    for (var i = 0; i < lines.length; ++i) if (lines[i] === undefined) lines[i] = '';
+    return lines;
+  });
+};
+
+// An article (its www.ptt.cc address, or jjterm:art/...) read on the BBS.
+// Resolves with { url: its www.ptt.cc address, html: an article page }.
+JJPtt.URL_IN_BOX = /https?:\/\/www\.ptt\.cc\/bbs\/[\w\-]+\/M\.\d+\.A\.\w+\.html/;
+// opts.onPage(page, pages, lines) after each page (see readPages); opts.bg:
+// reading ahead, which stops (err.yielded) when another job is waiting.
+JJPtt.prototype.termArticle = function(url, want, opts) {
+  var self = this;
+  var real = url;
+  opts = opts || {};
+  var yielded = false, wrong = false;
+  var onPage = function(i, n, lines) {
+    if (opts.bg && self.fgWaiting > 0) { yielded = true; return false; }
+    // another article than the list's: stopped before any of it is drawn
+    if (want && /^jjterm:/.test(url) && !JJPtt.linesAre(lines, want)) { wrong = true; return false; }
+    if (opts.onPage) return opts.onPage(i, n, lines, real);
+  };
+  return this.run(function() {
+    if (opts.bg && self.fgWaiting > 0) { var e0 = new Error('讓給前面的工作'); e0.yielded = true; throw e0; }
+    return self.ensureIn().then(function() {
+      var m = /^jjterm:art\/([^\/]+)\/(\d+)(?:\/([^\/]+))?$/.exec(url);
+      // reading ahead gives way as soon as the user opens something, not
+      // only between pages
+      if (!m) return self.toArticle(url).then(function() {
+        if (opts.bg && self.fgWaiting > 0) { yielded = true; var e1 = new Error('讓給前面的工作'); e1.yielded = true; throw e1; }
+        return self.readHere(onPage);
+      });
+      var open = function(byAuthor) {
+        return self.toList(decodeURIComponent(m[1]), m[3] ? decodeURIComponent(m[3]) : '').then(function() {
+          return self.cursorTo(+m[2], want, byAuthor);
+        }).then(function() {
+          // the article's 文章網址 (for pushing and replying)
+          return self.urlHere();
+        }).then(function(here) {
+          real = here;
+          return self.readHere(onPage);
+        }).then(function(lines) {
+          // the list said one article, PTT opened another (its list changed
+          // under the number, the cursor not where the screen showed it):
+          // never shown as that one -- found among the author's posts once more
+          if (!want || yielded || (!wrong && JJPtt.linesAre(lines, want))) return lines;
+          wrong = false;
+          console.log('JJptt BBS 開錯篇', url, JJPtt.linesHead(lines));
+          if (!byAuthor) return open(true);
+          throw new Error('PTT 開到別篇文章了（' + want.title + '），請重新整理列表再試一次');
+        });
+      };
+      return open(false);
+    }).then(function(lines) {
+      if (yielded) { var e = new Error('讓給前面的工作'); e.yielded = true; throw e; }
+      return { url: real, html: JJPtt.articleHtml(lines) };
+    });
+  }, opts.bg);
+};
+
+// The article's own header (作者 / 標題 lines) is `want` ({ author, title }).
+JJPtt.linesHead = function(lines) {
+  var head = { author: '', title: '' };
+  for (var i = 0; i < Math.min(lines.length, 6); ++i) {
+    var a = /^\s*作者\s+([\w]+)/.exec(lines[i] || ''), t = /^\s*標題\s+(.*?)\s*$/.exec(lines[i] || '');
+    if (a) head.author = a[1];
+    if (t) head.title = t[1];
+  }
+  return head;
+};
+JJPtt.linesAre = function(lines, want) {
+  var h = JJPtt.linesHead(lines);
+  if (!h.author && !h.title) return true;  // no header to tell (rare): as it is
+  return h.author.toLowerCase() === String(want.author).toLowerCase() && JJPtt.sameTitle(h.title, want.title);
+};
+
+// Same title, as far as both show it: Re: / Fw: and spacing aside, and a
+// list cuts long titles at the screen edge.
+JJPtt.sameTitle = function(a, b) {
+  var n = function(t) { return String(t || '').replace(/^\s*(?:(?:Re|R|Fw|轉)\s*:\s*)+/i, '').replace(/\s+/g, ' ').replace(/…$/, '').trim(); };
+  a = n(a);
+  b = n(b);
+  return a === b || (Math.min(a.length, b.length) >= 6 && (a.indexOf(b) === 0 || b.indexOf(a) === 0));
+};
+
+// The list row PTT's cursor is on (JJPtt.parseArticleRow), or null.
+JJPtt.prototype.cursorRow = function() {
+  var buf = this.app.buf;
+  for (var r = 1; r < (buf.rows || 24) - 1; ++r) {
+    var text = buf.getRowText(r, 0, buf.cols);
+    if (/^[>●]/.test(text)) return JJPtt.parseArticleRow(text);
+  }
+  return null;
+};
+
+JJPtt.isWanted = function(row, want) {
+  return !!row && (!want || (String(row.author).toLowerCase() === String(want.author).toLowerCase() &&
+    JJPtt.sameTitle(row.title, want.title)));
+};
+
+// In a board's list, the cursor onto article `num`, which has to be `want`
+// ({ author, title }) when given. The number seen in a filtered list
+// (推文數, search results) is that list's own, not the board's: then it is
+// found among the author's posts (a) instead.
+// byAuthor: straight to the author's posts, the number not tried.
+JJPtt.prototype.cursorTo = function(num, want, byAuthor) {
+  var self = this;
+  var jump = function(n) {
+    // already there (the newest, just searched): nothing to wait for
+    var here = self.cursorRow();
+    if (here && here.num === n && JJPtt.isWanted(here, want)) return Promise.resolve();
+    return self.sendSync(n + '\r', 2000);
+  };
+  return (byAuthor ? Promise.resolve() : jump(num)).then(function() {
+    if (!byAuthor && JJPtt.isWanted(self.cursorRow(), want)) return;
+    if (!want || !want.author) throw new Error('找不到第 ' + num + ' 篇');
+    var prev = self.screen();
+    self.send('a');
+    return self.wait({ ask: /作者/ }, 5000, prev, '搜尋作者').then(function() {
+      prev = self.screen();
+      self.type(want.author + '\r');
+      // the list is in a search now (on top of any before): toList / toBoard leave it
+      self.listQuery = (self.listQuery ? self.listQuery + ' ' : '') + 'author:' + want.author;
+      return self.searched(prev);
+    }).then(function() {
+      var pages = 0;
+      var look = function() {
+        var buf = self.app.buf, hit = 0;
+        for (var r = 1; r < (buf.rows || 24) - 1; ++r) {
+          var row = JJPtt.parseArticleRow(buf.getRowText(r, 0, buf.cols));
+          if (row && row.num && JJPtt.isWanted(row, want)) hit = row.num;  // the newest one on screen
+        }
+        if (hit) return jump(hit);
+        if (++pages > 5) throw new Error('在 ' + want.author + ' 的文章裡找不到「' + want.title + '」');
+        var p2 = self.screen();
+        self.send('\x1b[5~');  // Page Up: older posts
+        return self.settle(p2, 1500).then(function(moved) {
+          if (!moved) throw new Error('在 ' + want.author + ' 的文章裡找不到「' + want.title + '」');
+          return look();
+        });
+      };
+      return look();
+    }).then(function() {
+      if (!JJPtt.isWanted(self.cursorRow(), want)) throw new Error('找不到「' + want.title + '」');
+    });
+  });
+};
+
+// ---- a second, hidden connection (extension, www.ptt.cc down) --------------------------------
+// The extension's one connection is the user's own screen. To read articles
+// ahead while www.ptt.cc is down, a second one logs in with the saved
+// account and reads in the background: JJPtt on an app-like object with its
+// own screen buffer and connection, nothing drawn (PttReader.bgPtt).
+JJPtt.headlessApp = function(main) {
+  var h = { idleTime: 0, lastDataAt: 0, prefs: main.prefs };
+  h.buf = new TermBuf(80, 24);
+  h.conn = new main.conn.constructor(h);  // SSH or telnet, as the main one
+  h.conn.keepAlive = main.conn.keepAlive;
+  h.view = {
+    charset: 'big5', conn: h.conn, EnterChar: '\r', blinkOn: false, useEasyReadingMode: false,
+    bbscore: { navigateTo: { board: null } },
+    update: function() {}, updateCursorPos: function() {}
+  };
+  h.buf.setView(h.view);
+  h.parser = new lib.AnsiParser(h.buf);
+  h.onData = function(d) {
+    h.lastDataAt = Date.now();
+    h.parser.feed(d);
+  };
+  h.onClose = function() { h.conn.isConnected = false; };
+  h.appConn = new lib.AppConnection({
+    onConnect: function() { h.conn.isConnected = true; },
+    onDisconnect: function() { h.onClose(); },
+    onReceive: function(s) { h.conn.onDataAvailable(s); }
+  });
+  h.connect = function(site) {
+    var port = (main.connectedUrl && main.connectedUrl.port) || 23;
+    h.appConn.connect(function() { h.conn.connect(site, port); });
+  };
+  return h;
 };

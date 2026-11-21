@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README.en.md) | **日本語**
 
-[![Android アプリをダウンロード](https://img.shields.io/badge/Android-APK%20%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89-3DDC84?logo=android&logoColor=white)](https://github.com/killnopig/JJptt/releases/tag/android-stable) [![Chrome 拡張機能版](https://img.shields.io/badge/Chrome-%E6%8B%A1%E5%BC%B5%E6%A9%9F%E8%83%BD-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.ja.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-%E3%82%B3%E3%83%BC%E3%83%92%E3%83%BC%E3%82%92%E3%81%8A%E3%81%94%E3%82%8B-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/killnopig)
+[![Android アプリをダウンロード](https://img.shields.io/badge/Android-APK%20%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89-3DDC84?logo=android&logoColor=white)](https://github.com/JJptt1980/JJptt/releases/tag/android-stable) [![Chrome 拡張機能版](https://img.shields.io/badge/Chrome-%E6%8B%A1%E5%BC%B5%E6%A9%9F%E8%83%BD-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.ja.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-%E3%82%B3%E3%83%BC%E3%83%92%E3%83%BC%E3%82%92%E3%81%8A%E3%81%94%E3%82%8B-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jjptt1980) [![Facebook ページ](https://img.shields.io/badge/Facebook-%E3%83%9A%E3%83%BC%E3%82%B8-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
 
 **JJptt は PTT を読むための無料ツールです。** PTT の記事を読みやすくし、「誰かが世論を誘導しているかもしれない」というしるしを見つけて表示します。
 
@@ -38,6 +38,7 @@ flowchart LR
 4. **機種変更、パソコンの買い替え、設定のバックアップ**：[設定を別の端末へ](docs/settings-file.ja.md)。
 5. **アプリでメールや記事の編集など PTT の機能が見つからない**：[PTT にあって JJptt にまだない機能](docs/missing-features.ja.md)。それぞれ代わりの方法も書いてあります。
 6. **最近何が変わったか**：[更新履歴](CHANGELOG.md)（中国語）。
+7. **新しいバージョンのお知らせや機能紹介**：[JJptt の Facebook ページ](https://www.facebook.com/profile.php?id=61596622202223)（中国語）をフォローしてください。正式版の更新はそこでお知らせします。
 
 ## 誰が世論を誘導している？ JJptt ならひと目でわかる。
 

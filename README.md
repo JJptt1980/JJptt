@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md) | [日本語](README.ja.md)
 
-[![下載 Android App](https://img.shields.io/badge/Android-%E4%B8%8B%E8%BC%89%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/killnopig/JJptt/releases/tag/android-stable) [![Chrome 擴充功能版](https://img.shields.io/badge/Chrome-%E6%93%B4%E5%85%85%E5%8A%9F%E8%83%BD-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-%E8%AB%8B%E6%88%91%E5%96%9D%E6%9D%AF%E5%92%96%E5%95%A1-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/killnopig)
+[![下載 Android App](https://img.shields.io/badge/Android-%E4%B8%8B%E8%BC%89%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/JJptt1980/JJptt/releases/tag/android-stable) [![Chrome 擴充功能版](https://img.shields.io/badge/Chrome-%E6%93%B4%E5%85%85%E5%8A%9F%E8%83%BD-4285F4?logo=googlechrome&logoColor=white)](docs/desktop.md) [![Ko-fi](https://img.shields.io/badge/Ko--fi-%E8%AB%8B%E6%88%91%E5%96%9D%E6%9D%AF%E5%92%96%E5%95%A1-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jjptt1980) [![Facebook 粉絲專頁](https://img.shields.io/badge/Facebook-%E7%B2%89%E7%B5%B2%E5%B0%88%E9%A0%81-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/profile.php?id=61596622202223)
 
 **JJptt 是用來看 PTT 的免費工具。** 它讓 PTT 的文章更好讀，也會把「可能有人在帶風向」的跡象標出來給你看。
 
@@ -38,6 +38,7 @@ flowchart LR
 4. **要換手機、換電腦，或想備份設定**：[把設定搬到另一台](docs/settings-file.md)。
 5. **App 裡找不到看信、修改文章這些 PTT 功能**：[PTT 有、但 JJptt 還沒做的功能](docs/missing-features.md)，每一項都寫了現在可以怎麼辦。
 6. **想知道最近改了什麼**：[更新紀錄](CHANGELOG.md)。
+7. **想收到新版通知、看功能介紹**：追蹤 [JJptt 的 Facebook 粉絲專頁](https://www.facebook.com/profile.php?id=61596622202223)，每次正式版更新都會在那裡說明。
 
 ## PTT 上誰在帶風向？JJptt 讓你一眼看穿。
 

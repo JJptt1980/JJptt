@@ -124,6 +124,9 @@ locale.zh_TW = {
   "update_needHost": {
     "message": "自動更新需要新版的本機程式：請在 jjptt/native-host 資料夾重新執行一次安裝（Mac：sh install.sh）。"
   },
+  "update_notChanged": {
+    "message": "已在 jjptt 資料夾執行 git pull，但版本還是 v%s，沒有更新到。git 的回應："
+  },
   "update_failedRun": {
     "message": "自動更新失敗。"
   },
@@ -570,6 +573,9 @@ locale.zh_TW = {
   "cmenu_openReader": {
     "message": "用閱讀模式開啟"
   },
+  "reader_termPage": {
+    "message": "PTT 網頁故障，從 BBS 讀取中 %1／%2 頁"
+  },
   "reader_needFirstPage": {
     "message": "請先回到文章第一頁（看得到作者、標題的那頁）再開啟"
   },
@@ -985,6 +991,9 @@ locale.zh_TW = {
   },
   "about_kofiPost": {
     "message": "（自願，不影響任何功能）"
+  },
+  "about_notice_title": {
+    "message": "使用聲明"
   },
   "about_traffic_title": {
     "message": "流量提醒"

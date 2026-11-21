@@ -17,8 +17,8 @@ function JJUpdater(app) {
 
 // GitHub API first (raw.githubusercontent.com can serve a copy a few minutes
 // old right after a push), raw file as a fallback.
-JJUpdater.REMOTE_API = 'https://api.github.com/repos/killnopig/JJptt/contents/extension/manifest.json?ref=gh-pages';
-JJUpdater.REMOTE_MANIFEST = 'https://raw.githubusercontent.com/killnopig/JJptt/gh-pages/extension/manifest.json';
+JJUpdater.REMOTE_API = 'https://api.github.com/repos/JJptt1980/JJptt/contents/extension/manifest.json?ref=gh-pages';
+JJUpdater.REMOTE_MANIFEST = 'https://raw.githubusercontent.com/JJptt1980/JJptt/gh-pages/extension/manifest.json';
 JJUpdater.CHECK_EVERY = 30 * 60 * 1000;
 
 JJUpdater.compare = function(a, b) {
@@ -108,10 +108,12 @@ JJUpdater.prototype.refresh = function(manual) {
     // already downloaded: only the reload is missing
     this.stopPolling();
     this.setStatus(i18n('update_downloaded').replace('%s', disk));
-    this.showBar(i18n('update_downloaded').replace('%s', disk), i18n('update_apply'));
+    if (manual || !this.wasClosed(disk)) this.showBar(i18n('update_downloaded').replace('%s', disk), i18n('update_apply'), '', disk);
   } else if (remote && JJUpdater.compare(remote, disk) > 0) {
     this.setStatus(i18n('update_available').replace('%s', remote));
-    this.showBar(i18n('update_available').replace('%s', remote), i18n('update_now'), 'now');
+    // closed with × for this version: not again on every check or every
+    // time the settings open (the settings still say there is one)
+    if (manual || !this.wasClosed(remote)) this.showBar(i18n('update_available').replace('%s', remote), i18n('update_now'), 'now', remote);
     this.startPolling();
   } else {
     this.hideBar();
@@ -189,6 +191,7 @@ JJUpdater.prototype.updateNow = function() {
   var self = this;
   if (this.updating) return;
   this.updating = true;
+  var gitSaid = '';
   this.showBar(i18n('update_running'), '');
   this.setStatus(i18n('update_running'));
   this.native({ type: 'ping' }).then(function(pong) {
@@ -199,6 +202,7 @@ JJUpdater.prototype.updateNow = function() {
   }).then(function(res) {
     if (!res) throw new Error(i18n('update_failedRun'));
     if (res.type !== 'updated') throw new Error(res.message || i18n('update_failedRun'));
+    gitSaid = String(res.message || '').trim();
     return self.fetchVersion(chrome.runtime.getURL('manifest.json'));
   }).then(function(disk) {
     self.updating = false;
@@ -207,7 +211,12 @@ JJUpdater.prototype.updateNow = function() {
       self.showBar(i18n('update_restarting'), '');
       setTimeout(function() { self.apply(); }, 800);
     } else {
-      self.check(true);
+      // git ran but the folder is the same version (another branch, already
+      // pulled elsewhere...): say what git said instead of offering the same
+      // update again as if nothing happened
+      var text = i18n('update_notChanged').replace('%s', disk || self.running()) + ' ' + (gitSaid || '-');
+      self.setStatus(text);
+      self.showBar(text + ' ' + i18n('update_howto'), '');
     }
   }).catch(function(err) {
     self.updating = false;
@@ -223,7 +232,14 @@ JJUpdater.prototype.setStatus = function(text) {
   $('#update_status').text(text);
 };
 
-JJUpdater.prototype.showBar = function(text, buttonText, action) {
+JJUpdater.CLOSED_KEY = 'jjUpdateBarClosed';
+
+JJUpdater.prototype.wasClosed = function(version) {
+  try { return !!version && localStorage.getItem(JJUpdater.CLOSED_KEY) === version; } catch (e) { return false; }
+};
+
+// `version`: the version the bar is about; × remembers it
+JJUpdater.prototype.showBar = function(text, buttonText, action, version) {
   var self = this;
   var bar = document.getElementById('jjUpdateBar');
   if (!bar) {
@@ -248,7 +264,12 @@ JJUpdater.prototype.showBar = function(text, buttonText, action) {
   close.className = 'jj-close';
   close.textContent = '×';
   close.title = i18n('update_later');
-  close.addEventListener('click', function() { self.hideBar(); });
+  close.addEventListener('click', function() {
+    if (version) {
+      try { localStorage.setItem(JJUpdater.CLOSED_KEY, version); } catch (e) {}
+    }
+    self.hideBar();
+  });
   bar.appendChild(close);
   bar.style.display = 'flex';
 };

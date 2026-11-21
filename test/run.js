@@ -17,7 +17,7 @@ global.i18n = function(k) { return (locale.zh_TW[k] && locale.zh_TW[k].message) 
 global.$ = function() { return { length: 0 }; };
 global.lib = { safeGetItem: function(k) { return global.lib.store[k] || null; },
                safeSetItem: function(k, v) { global.lib.store[k] = v; }, store: {} };
-['js/string_util.js', 'js/predefined_config.js', 'js/fact_check.js', 'js/reader.js', 'js/mobile_ptt.js', 'js/mobile.js', 'js/mobile_article.js', 'js/mobile_board.js', 'js/pref.js', 'js/spam_guard.js'].forEach(function(f) {
+['js/string_util.js', 'js/predefined_config.js', 'js/fact_check.js', 'js/reader.js', 'js/mobile_ptt.js', 'js/mobile.js', 'js/mobile_article.js', 'js/mobile_board.js', 'js/mobile_home.js', 'js/pref.js', 'js/spam_guard.js'].forEach(function(f) {
   vm.runInThisContext(fs.readFileSync(path.join(root, f), 'utf8'), { filename: f });
 });
 
@@ -295,7 +295,7 @@ test('the exemption runs out after 24 hours', function() {
 console.log('loading articles');
 
 test('every loaded article (read or prefetched) goes through the fact check', function() {
-  var src = PttReader.prototype.fetchArticle.toString();
+  var src = PttReader.prototype.articleFromDoc.toString();
   assert.ok(/factCheck\.analyze\(article\)/.test(src), 'fetchArticle runs the fact check');
   assert.ok(/assignBlocks\(body, pushes\)/.test(src), 'fetchArticle sets push.block');
   assert.ok(/findArticle\(/.test(PttReader.prototype.startPrefetch.toString()), 'prefetch loads through findArticle');
@@ -404,7 +404,7 @@ test('共伴 history: an article under ?_=… is the same article; old copies fo
 });
 test('fetchArticle keeps the article\'s own address (no ?_= cache query)', function() {
   assert.strictEqual(PttReader.articleUrl('https://www.ptt.cc/bbs/G/M.1.A.html?_=123'), 'https://www.ptt.cc/bbs/G/M.1.A.html');
-  assert.ok(/PttReader\.articleUrl\(url\)/.test(PttReader.prototype.fetchArticle.toString()));
+  assert.ok(/PttReader\.articleUrl\(doc\.jjUrl \|\| url\)/.test(PttReader.prototype.articleFromDoc.toString()));
 });
 
 // ---- automatic blacklist: batch, toast, permanent ---------------------------------
@@ -652,7 +652,8 @@ test('app search: 推文數 labels (爆文, 噓爆) and the quick buttons', func
   assert.strictEqual(JJMobile.pushQueryLabel('-100'), '噓爆');
   assert.strictEqual(JJMobile.pushQueryLabel('20'), '推 ≥ 20');
   assert.strictEqual(JJMobile.pushQueryLabel('-10'), '噓 ≥ 10');
-  assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, -100]);
+  assert.strictEqual(JJMobile.pushQueryLabel('200'), '止爆');
+  assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, 200, -100]);
 });
 test('version: JJptt\'s version and the run; before that 0.0.N', function() {
   assert.strictEqual(JJMobile.version(57, '1.33.0'), '1.33.0 (57)');
@@ -919,6 +920,16 @@ function fakePtt(script) {
   };
   function move(k) {
     var next = script[at][1] && script[at][1][k];
+    // a push's text typed without Enter (typePush reads it back first): PTT
+    // shows it on its input line (the last), and the Enter goes on as the
+    // script's 「text + \r」 says
+    if (next === undefined && script[at][1] && script[at][1][k + '\r'] !== undefined && k) {
+      var lines = script[at][0].split('\n');
+      lines[lines.length - 1] += ' ' + k;
+      script.echoed = [lines.join('\n'), { '\r': script[at][1][k + '\r'] }];
+      at = 'echoed';
+      return;
+    }
     if (next === undefined) return;  // keys PTT isn't waiting for are lost
     at = next;
     // a screen with [text, keys, { after: ms, to: n }] moves on by itself
@@ -1085,6 +1096,11 @@ function boardScript(after) {
   s.push(['搜尋文章代碼(AID): #', {}]);                                            // 9
   s[9][1][AID + '\r'] = 10;
   s.push(['【板主:x】 看板《Test》 ●', after]);                                     // 10
+  // Q: the 文章網址 under the cursor (the AID landed on the right one);
+  // # again: the second jump (PTT's first one can land a few articles off)
+  after.Q = 'qbox';
+  after['#'] = 9;
+  s.qbox = ['【板主:x】 看板《Test》 ●\n│ 文章網址: http://www.ptt.cc/bbs/Test/M.1451110159.A.379.html │\n請按任意鍵繼續', { ' ': 10 }];
   return s;
 }
 
@@ -1098,7 +1114,7 @@ testAsync('push: to the board, the article by AID, X, 推, text, confirm', async
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'X', '1', '說得好', '\r', 'y\r']);
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', '#', AID + '\r', 'Q', ' ', 'X', '1', '說得好', '\r', 'y\r']);
 });
 // the backspaces typePush sends to erase s
 function BS(s) { return new Array(JJPtt.big5Length(s) + 3).join('\b'); }
@@ -1171,7 +1187,7 @@ testAsync('reply: y, to the board, same title, no quote, lines, Ctrl-X, save, si
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.reply('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '第一行\n第二行', false);
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'y', 'f\r', 'y\r', 'n\r',
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', '#', AID + '\r', 'Q', ' ', 'y', 'f\r', 'y\r', 'n\r',
                                    '第一行', '\r', '第二行', '\x18', 's\r', '0\r', ' ']);
 });
 
@@ -1190,7 +1206,7 @@ testAsync('reply: an answered question stays on the screen and is not answered a
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.reply('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '嗨', false);
-  sameJson(f.typed.slice(6), ['y', 'f\r', 'y\r', 'n\r', '嗨', '\x18', 's\r', ' ']);
+  sameJson(f.typed.slice(10), ['y', 'f\r', 'y\r', 'n\r', '嗨', '\x18', 's\r', ' ']);
 });
 
 test('發文 categories from the Ctrl-P screen', function() {
@@ -1273,6 +1289,98 @@ testAsync('push: s in 我的最愛 only moves the cursor onto the board -> → g
   assert.ok(f.typed.indexOf('讚') >= 0, JSON.stringify(f.typed));
 });
 
+testAsync('push: the list header 看板《…》 is not the answer to the text -> the 確定 question is answered', async function() {
+  var s = boardScript({ 'X': 11 });
+  s.push(['【板主:x】 看板《Test》\n作者本人, 使用 → 加註方式\n→ tester:', { '滾蛋\r': 'sending' }]);  // 11
+  s.sending = ['【板主:x】 看板《Test》\n作者本人, 使用 → 加註方式\n→ tester: 滾蛋', {}, { after: 60, to: 'sure' }];
+  s.sure = ['【板主:x】 看板《Test》\n→ tester: 滾蛋\n確定要加入嗎？ [y/N]:', { 'y\r': 8 }];
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '3', '滾蛋');
+  assert.strictEqual(f.typed[f.typed.length - 1], 'y\r', JSON.stringify(f.typed));
+});
+function confirmScript(afterYes) {
+  var s = boardScript({ 'X': 11 });
+  var head = '【板主:x】 看板《Test》';
+  s[10] = [head + '\n●   1 1/01 tester  □ 測試', { 'X': 11, 'Q': 'qbox', '#': 9 }];
+  s.push([head + '\n●   1 1/01 tester  □ 測試\n作者本人, 使用 → 加註方式\n→ tester:', { '滾蛋\r': 'sure' }]);  // 11
+  s.sure = [head + '\n●   1 1/01 tester  □ 測試\n→ tester: 滾蛋\n確定要加入嗎？ [y/N]:', { 'y\r': 'after' }];
+  s.after = afterYes;
+  return s;
+}
+var PUSH_URL = 'https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html';
+testAsync('push 確定: the Enter after y opened the article (瀏覽 第) -> pushed', async function() {
+  var f = fakePtt(confirmScript([' 作者 tester\n→ tester: 滾蛋\n  瀏覽 第 1/1 頁 (100%)  (y)回應(X%)推文', {}]));
+  await f.ptt.login('tester', 'right');
+  await f.ptt.push(PUSH_URL, '3', '滾蛋');
+});
+testAsync('push 確定: the question gone, the list header unchanged -> pushed', async function() {
+  var f = fakePtt(confirmScript(['【板主:x】 看板《Test》\n●   1 1/01 tester  □ 測試', {}]));
+  await f.ptt.login('tester', 'right');
+  await f.ptt.push(PUSH_URL, '3', '滾蛋');
+});
+testAsync('push 確定: PTT refuses (推文太快) -> its words, and the screen is kept', async function() {
+  var f = fakePtt(confirmScript(['【板主:x】 看板《Test》\n●   1 1/01 tester  □ 測試\n推文太快，請稍候再試 請按任意鍵繼續', {}]));
+  await f.ptt.login('tester', 'right');
+  await assert.rejects(f.ptt.push(PUSH_URL, '3', '滾蛋'), /沒讓這則推文出去：推文太快/);
+  assert.ok(/推文太快/.test(f.ptt.lastFailure.screen), f.ptt.lastFailure.screen);
+});
+testAsync('push 確定: an article line saying 不能 is not a refusal', async function() {
+  var f = fakePtt(confirmScript([' 作者 tester\n我不能接受\n  瀏覽 第 1/1 頁 (100%)', {}]));
+  await f.ptt.login('tester', 'right');
+  await f.ptt.push(PUSH_URL, '3', '滾蛋');
+});
+testAsync('board: a push line left open on the bottom is emptied and closed before s', async function() {
+  var s = LOGIN.slice(0, 4);
+  var bs = new Array(81).join('\b') + '\r';
+  s[4] = ['【板主:x】 看板《Other》\n[→]閱讀 [s]選擇看板\n作者本人, 使用 → 加註方式\n→ tester: 奢音', {}];
+  s[4][1][bs] = 'list';
+  s.list = ['【板主:x】 看板《Other》\n[→]閱讀 [s]選擇看板\n文章選讀 (y)回應(X)推文', { 's': 'prompt' }];
+  s.prompt = ['【板主:x】 看板《Other》\n請輸入看板名稱(按空白鍵自動搜尋):', { 'Test\r': 'in' }];
+  s.in = ['【板主:y】 看板《Test》 文章選讀', {}];
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await f.ptt.toBoard('Test');
+  assert.deepStrictEqual(f.typed, [bs, 's', 'Test\r']);
+});
+testAsync('reader (extension): after X, back on the article -> waits for the push on the web, not the page from before', async function() {
+  var h = { board: 'Test', author: 'a', title: 't', key: 'Test|a|t' };
+  var r = Object.create(PttReader.prototype);
+  var sent = [], fetched = [], shown = [], opened = 0, n = 0;
+  r.app = { buf: { pageState: 3 }, conn: { send: function(k) { sent.push(k); } }, setInputAreaFocus: function() {} };
+  r.enabled = true;
+  r.available = function() { return true; };
+  r.trackTerminal = function() { r.lastHeader = h; };
+  r.headerFromTerminal = function() { return h; };
+  r.close = function() {};
+  r.render = function(a) { shown.push(a.pushes.length); };
+  r.show = r.restorePosition = function() {};
+  r.openFor = function() { opened++; };
+  r.fetchArticle = function(url) {
+    fetched.push(url);
+    return Promise.resolve({ url: 'u', pushes: new Array(++n >= 2 ? 3 : 2) });
+  };
+  r.currentKey = h.key;
+  r.article = { url: 'https://www.ptt.cc/bbs/Test/M.1.A.1.html', pushes: [1, 2] };
+  var poll = PttReader.PUSH_POLL_MS;
+  PttReader.PUSH_POLL_MS = 5;
+  try {
+    r.closeAndSend('X');
+    r.app.buf.pageState = 0; r.onTerminalUpdate();  // the push prompt
+    r.app.buf.pageState = 3; r.onTerminalUpdate();  // the article again
+    r.onTerminalUpdate();                           // more redraws: one wait
+    await new Promise(function(res) { setTimeout(res, 60); });
+  } finally {
+    PttReader.PUSH_POLL_MS = poll;
+  }
+  assert.deepStrictEqual(sent, ['X']);
+  assert.strictEqual(opened, 0);
+  assert.deepStrictEqual(shown, [3]);
+  assert.strictEqual(fetched.length, 2);
+  assert.ok(/M\.1\.A\.1\.html\?_=\d+$/.test(fetched[0]), fetched[0]);
+});
 testAsync('board prompt: waits for 請輸入看板名稱, not the list header\'s 「選擇看板」', async function() {
   // straight from the list of another board, the prompt shows only after a while
   var s = LOGIN.slice(0, 4);
@@ -1463,6 +1571,38 @@ test('reader: space past the end of the last article goes back to the list, not 
 });
 
 // ---- classic window frames (js/frame_style.js) ----------------------------
+console.log('extension update bar');
+vm.runInThisContext(fs.readFileSync(path.join(root, 'js/updater.js'), 'utf8'), { filename: 'js/updater.js' });
+test('update bar: closed with × for a version, it does not come back for that version (each check, opening settings)', function() {
+  var store = {};
+  global.localStorage = { getItem: function(k) { return k in store ? store[k] : null; }, setItem: function(k, v) { store[k] = String(v); } };
+  try {
+    var u = Object.create(JJUpdater.prototype);
+    var bars = [];
+    u.running = function() { return '1.35.1'; };
+    u.setStatus = u.startPolling = u.stopPolling = u.hideBar = function() {};
+    u.app = { showToast: function() {} };
+    var close = null;
+    u.showBar = function(text, btn, action, version) {
+      bars.push(version);
+      close = function() { localStorage.setItem(JJUpdater.CLOSED_KEY, version); };  // what × does
+    };
+    u.diskVersion = '1.35.1';
+    u.remoteVersion = '1.35.2';
+    u.refresh(false);
+    sameJson(bars, ['1.35.2']);
+    close();
+    u.refresh(false);
+    sameJson(bars, ['1.35.2'], 'not again for 1.35.2');
+    u.refresh(true);
+    sameJson(bars, ['1.35.2', '1.35.2'], 'the settings button still shows it');
+    u.remoteVersion = '1.35.3';
+    u.refresh(false);
+    sameJson(bars, ['1.35.2', '1.35.2', '1.35.3'], 'a newer version is shown again');
+  } finally {
+    delete global.localStorage;
+  }
+});
 vm.runInThisContext(fs.readFileSync(path.join(root, 'js/frame_style.js'), 'utf8'), { filename: 'js/frame_style.js' });
 test('視窗風格: setting, choices, page fields and text in both languages', function() {
   assert.strictEqual(DEFAULT_PREFS.frameStyle, 0, 'plain (all black) stays the default');
@@ -1548,6 +1688,314 @@ test('視窗風格: a failed connection drops the welcome screen so the error sh
   var src = fs.readFileSync(path.join(root, 'js/pttchrome.js'), 'utf8');
   var onClose = src.slice(src.indexOf('prototype.onClose'), src.indexOf('prototype.sendData'));
   assert.ok(/JJFrame\.onClose\(\)/.test(onClose), 'App.onClose does not tell the frame');
+});
+
+// The real case (Gossiping, 11/17): PTT cut orange7's URL at the end of a
+// full push and put the rest in the next one.
+var splitPushes = [
+  { id: 'TOEY', content: '能自己坦白錯誤很好，但是男性跟正常女性還' },
+  { id: 'orange7', content: 'https://houde-lawyer.com/%E6%9D%8E%E6%' },
+  { id: 'orange7', content: '83%A0%E6%9A%84/' },
+  { id: 'orange7', content: '也差太多了吧' }
+];
+var splitWhole = 'https://houde-lawyer.com/%E6%9D%8E%E6%83%A0%E6%9A%84/';
+
+test('split URL: a URL cut at the end of a full push is joined with the next push', function() {
+  var j = SplitUrl.joins(splitPushes);
+  assert.ok(!j[0], 'a push without a URL');
+  assert.deepStrictEqual(j[1], { url: splitWhole, first: true });
+  assert.deepStrictEqual(j[2], { url: splitWhole, tail: '83%A0%E6%9A%84/' });
+  assert.ok(!j[3], 'the push after the URL is not part of it');
+  // three lines: the middle one is all URL and full again
+  var mid = 'abcdefghij%E6%9D%8E%E6%83%A0%E6%9A%84/abcd';  // 7 + 42 >= 44
+  var three = SplitUrl.joins([
+    { id: 'orange7', content: 'https://houde-lawyer.com/%E6%9D%8E%E6%' },
+    { id: 'orange7', content: mid },
+    { id: 'orange7', content: 'xyz/1 看這個' }
+  ]);
+  assert.strictEqual(three[0].url, 'https://houde-lawyer.com/%E6%9D%8E%E6%' + mid + 'xyz/1');
+  assert.strictEqual(three[2].tail, 'xyz/1');
+});
+
+test('split URL: not joined when the push is not full, the user changes, or the reply is a word', function() {
+  var short = 'https://i.imgur.com/abc.jpg';
+  assert.strictEqual(SplitUrl.joins([{ id: 'orange7', content: short }, { id: 'orange7', content: '123/' }]).length, 0, 'short push');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'TOEY', content: '83%A0%E6%9A%84/' }]).length, 0, 'other user');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'orange7', content: 'XD' }]).length, 0, '"XD" is not a URL');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'orange7', content: 'https://a.com/' }]).length, 0, 'a new URL');
+  assert.strictEqual(SplitUrl.joins([splitPushes[1], { id: 'orange7', content: '對啊' }]).length, 0, 'text');
+});
+
+test('split URL: reading mode and the app link both parts to the whole URL', function() {
+  var st = { fg: 3, bg: 0, hl: false, href: '' };
+  var j = SplitUrl.joins(splitPushes);
+  var a = PttReader.pushSegs(splitPushes[1].content, j[1], st, ':');
+  assert.deepStrictEqual(a.map(function(s) { return [s.text, s.st.href]; }),
+    [[':', ''], ['https://houde-lawyer.com/%E6%9D%8E%E6%', splitWhole]]);
+  var b = PttReader.pushSegs('83%A0%E6%9A%84/ 這篇', j[2], st);
+  assert.deepStrictEqual(b.map(function(s) { return [s.text, s.st.href]; }),
+    [['83%A0%E6%9A%84/', splitWhole], [' 這篇', '']]);
+  assert.ok(b[0].tail, 'the rest of a URL would show its picture twice');
+  var plain = PttReader.pushSegs('哈哈', undefined, st, ':');
+  assert.deepStrictEqual(plain.map(function(s) { return s.text; }), [':', '哈哈']);
+  ['js/reader.js', 'js/mobile_article.js'].forEach(function(f) {
+    var src = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.ok(/lineNode\(PttReader\.pushSegs\(p\.content, (join|urlJoins\[i\])/.test(src), f + ' does not join split URLs');
+  });
+  assert.ok(/!seg\.tail/.test(PttReader.prototype.lineNode.toString()), 'the rest of a URL is counted as a picture');
+});
+
+test('split URL: the whole URL gets its thumbnail or link card, and is the one fetched ahead', function() {
+  var j = SplitUrl.joins(splitPushes);
+  assert.ok(PttReader.pushMedia(splitWhole, j[1]), 'a joined web page gets no card');
+  assert.ok(!PttReader.pushMedia('https://houde-lawyer.com/x', undefined), 'a plain web page link in a push gets a card');
+  assert.ok(PttReader.pushMedia('https://i.imgur.com/abcdefg.jpg', undefined), 'pictures in pushes');
+  ['js/reader.js', 'js/mobile_article.js'].forEach(function(f) {
+    var src = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.ok(/PttReader\.pushMedia\(u, (join|urlJoins\[i\])\)/.test(src), f + ' shows only pictures under pushes');
+  });
+  var fetched = [], realImage = global.Image;
+  global.Image = function() {};
+  try {
+    var article = { pushes: splitPushes, text: splitPushes.map(function(p) { return p.content; }).join('\n') };
+    PttReader.prototype.preloadMedia.call({
+      preloadImages: function() { return true; },
+      displaySrc: function(s) { return s; },
+      previewPermission: function() { return { then: function(f) { f(true); } }; },
+      fetchPreview: function(u) { fetched.push(u); return { then: function() {} }; }
+    }, article);
+  } finally { global.Image = realImage; }
+  assert.deepStrictEqual(fetched, [splitWhole], 'the cut URL is fetched (HTTP 400) instead of the whole one');
+});
+
+test('reader: a picture refused without a referrer (i.verb.tw, 403) is tried once more with one', function() {
+  var attrs = { src: 'https://i.verb.tw/ck58LPU3.jpg' }, sets = [];
+  var im = { referrerPolicy: 'no-referrer', style: {},
+    getAttribute: function(k) { return attrs[k]; },
+    removeAttribute: function(k) { delete attrs[k]; },
+    setAttribute: function(k, v) { attrs[k] = v; sets.push(v); } };
+  var onError = PttReader.imageRetry(im);
+  onError();
+  assert.strictEqual(im.referrerPolicy, 'strict-origin-when-cross-origin', 'not retried with a referrer');
+  assert.deepStrictEqual(sets, ['https://i.verb.tw/ck58LPU3.jpg'], 'not loaded again');
+  assert.notStrictEqual(im.style.display, 'none', 'hidden before the retry');
+  onError();
+  assert.strictEqual(im.style.display, 'none', 'a picture that fails twice stays on screen');
+  assert.strictEqual(sets.length, 1, 'retried more than once');
+  var src = fs.readFileSync(path.join(root, 'js/reader.js'), 'utf8');
+  assert.ok(/addEventListener\('error', PttReader\.imageRetry\(im\)\)/.test(src), 'article / push pictures are not retried');
+  assert.ok((src.match(/PttReader\.imageRetry\(/g) || []).length >= 3, 'hover preview and link-card pictures are not retried');
+});
+
+test('YouTube links: Shorts, phone, live and watch?…&v= are videos too', function() {
+  var id = function(u) { return u.parseYoutubeUrl(); };
+  assert.strictEqual(id('https://youtube.com/shorts/0tGN0HRUZkQ?si=p1eJoQZWfmEUPoHW'), '0tGN0HRUZkQ');
+  assert.strictEqual(id('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://m.youtube.com/watch?feature=share&v=dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://youtu.be/dQw4w9WgXcQ?t=30'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://www.youtube.com/live/dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.strictEqual(id('https://www.youtube.com/@channel'), null);
+  assert.strictEqual(id('https://example.com/?u=https://youtu.be/dQw4w9WgXcQ'), null, 'a YouTube URL inside another one');
+  assert.ok(PttReader.pushMedia('https://youtube.com/shorts/0tGN0HRUZkQ'), 'videos in pushes get no thumbnail');
+});
+
+test('short links in pushes: a card only when they lead to YouTube', function() {
+  assert.ok(PttReader.isShortLink('https://reurl.cc/mzVaZl'));
+  assert.ok(PttReader.isShortLink('https://bit.ly/3abcDEF'));
+  assert.ok(!PttReader.isShortLink('https://reurl.cc/'), 'the site itself');
+  assert.ok(!PttReader.isShortLink('https://ppt.cc/fAbcd'), 'ppt.cc is a picture host');
+  assert.ok(!PttReader.isShortLink('https://example.com/abc'));
+  // the reurl.cc page (11/17): the target is in a hidden field
+  var reurl = { querySelector: function(sel) {
+    return /input/.test(sel) ? { getAttribute: function() { return 'https://youtube.com/shorts/0tGN0HRUZkQ?si=p1eJoQZWfmEUPoHW'; } } : null;
+  } };
+  assert.strictEqual(PttReader.pageTarget(reurl, '').parseYoutubeUrl(), '0tGN0HRUZkQ');
+  var none = { querySelector: function() { return null; } };
+  assert.strictEqual(PttReader.pageTarget(none, '<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">x</a>').parseYoutubeUrl(), 'dQw4w9WgXcQ');
+  assert.strictEqual(PttReader.pageTarget(none, '<p>nothing</p>'), '');
+  assert.ok(/PttReader\.pageTarget\(doc, html\)/.test(PttReader.prototype.fetchPreview.toString()), 'previews do not look for the target');
+
+  // fake DOM for the cards
+  var mk = function(tag, cls) {
+    var kids = [], classes = (cls || '').split(' ').filter(Boolean), attrs = {};
+    var n = { tagName: tag, style: {}, childNodes: kids, parentNode: null,
+      get className() { return classes.join(' '); }, set className(v) { classes = String(v).split(' ').filter(Boolean); },
+      classList: { contains: function(c) { return classes.indexOf(c) >= 0; }, add: function(c) { if (classes.indexOf(c) < 0) classes.push(c); },
+                   remove: function(c) { classes = classes.filter(function(x) { return x !== c; }); } },
+      setAttribute: function(k, v) { attrs[k] = v; }, getAttribute: function(k) { return attrs[k]; },
+      addEventListener: function() {},
+      appendChild: function(c) { c.parentNode = n; kids.push(c); return c; },
+      insertBefore: function(c, ref) { c.parentNode = n; var i = kids.indexOf(ref); kids.splice(i < 0 ? 0 : i, 0, c); return c; },
+      removeChild: function(c) { kids.splice(kids.indexOf(c), 1); c.parentNode = null; },
+      querySelector: function(sel) {
+        var want = sel.replace(/^\./, ''), found = null;
+        (function walk(list) { list.forEach(function(k) { if (!found && k.classList.contains(want)) found = k; if (!found) walk(k.childNodes); }); })(kids);
+        return found;
+      } };
+    return n;
+  };
+  var realDoc = global.document;
+  global.document = { createElement: function(tag) { return mk(tag); } };
+  try {
+    var shortCard = function() {
+      var wrap = mk('div', 'jjr-media'), page = mk('div');
+      page.appendChild(wrap);
+      var card = mk('a', 'jjr-card jjr-short');
+      card.setAttribute('data-preview-url', 'https://reurl.cc/mzVaZl');
+      var text = mk('div', 'jjr-card-text');
+      text.appendChild(mk('div', 'jjr-card-host'));
+      card.appendChild(text);
+      wrap.appendChild(card);
+      return { page: page, wrap: wrap, card: card };
+    };
+    var answer = function(info) { return { fetchPreview: function() { return { then: function(f) { f(info); } }; }, displaySrc: function(s) { return s; } }; };
+    var yt = shortCard();
+    PttReader.prototype.fillCard.call(answer({ title: '- YouTube', youtube: '0tGN0HRUZkQ' }), yt.card);
+    assert.ok(yt.card.classList.contains('jjr-yt') && !yt.card.classList.contains('jjr-short'), 'short link to YouTube not shown as a video');
+    var box = yt.card.querySelector('.jjr-yt-thumb');
+    assert.ok(box, 'no thumbnail');
+    assert.strictEqual(box.childNodes[0].src, 'https://i.ytimg.com/vi/0tGN0HRUZkQ/hqdefault.jpg');
+    assert.ok(box.querySelector('.jjr-yt-play'), 'no YouTube play button on the thumbnail');
+    assert.strictEqual(yt.card.querySelector('.jjr-card-host').textContent, 'YouTube');
+    var other = shortCard();
+    PttReader.prototype.fillCard.call(answer({ title: 'Some shop', image: 'https://x/y.jpg' }), other.card);
+    assert.strictEqual(other.page.childNodes.length, 0, 'short link that is not a video still has a card');
+    // in the article body a short link keeps its usual card
+    var src = PttReader.prototype.linkBlock.toString();
+    assert.ok(/inPush && PttReader\.isShortLink\(url\)/.test(src), 'short links in the article lose their card');
+    // a YouTube card drawn directly also has the play button
+    var direct = PttReader.ytThumb('dQw4w9WgXcQ');
+    assert.ok(direct.querySelector('.jjr-yt-play'));
+  } finally { global.document = realDoc; }
+  var css = fs.readFileSync(path.join(root, 'css/main.css'), 'utf8');
+  assert.ok(/\.jjr-yt-play \{[^}]*position: absolute/.test(css) && /\.jjr-yt-play::after/.test(css), 'play button has no style');
+  ['js/reader.js', 'js/mobile_article.js'].forEach(function(f) {
+    assert.ok(/linkBlock\(u, true, true\)/.test(fs.readFileSync(path.join(root, f), 'utf8')), f + ': push media not marked as in a push');
+  });
+});
+
+test('imgur album in a push: shown as its first picture, not an empty card', function() {
+  assert.ok(PttReader.isImgurAlbum('https://imgur.com/a/gj1g3yJ'));
+  assert.ok(PttReader.isImgurAlbum('https://imgur.com/gallery/some-title-gj1g3yJ'));
+  assert.ok(PttReader.isImgurAlbum('https://m.imgur.com/a/gj1g3yJ'));
+  assert.ok(!PttReader.isImgurAlbum('https://imgur.com/gj1g3yJ'), 'a single picture is not an album');
+  assert.ok(!PttReader.isImgurAlbum('https://i.imgur.com/59qIm1A.jpeg'));
+  assert.ok(PttReader.pushMedia('https://imgur.com/a/gj1g3yJ'), 'albums get nothing under the push');
+  assert.strictEqual(PttReader.albumPicture('https://i.imgur.com/59qIm1A.jpeg?fb'), 'https://i.imgur.com/59qIm1A.jpeg', 'the Facebook crop is shown');
+  // the card is replaced by the picture once the album page is read
+  var replaced = null;
+  var card = { classList: { contains: function(c) { return c === 'jjr-imgur-album'; }, add: function() {} },
+    getAttribute: function() { return 'https://imgur.com/a/gj1g3yJ'; },
+    parentNode: { replaceChild: function(n) { replaced = n; } } };
+  var realDoc = global.document;
+  global.document = { createElement: function(tag) {
+    var a = {};
+    return { tagName: tag, style: {}, setAttribute: function(k, v) { a[k] = v; }, getAttribute: function(k) { return a[k]; },
+             addEventListener: function() {}, appendChild: function() {} };
+  } };
+  try {
+    PttReader.prototype.fillCard.call({
+      displaySrc: function(s) { return PttReader.lowResSrc(s); },
+      fetchPreview: function() { return { then: function(f) { f({ title: 'imgur.com', image: 'https://i.imgur.com/59qIm1A.jpeg?fb' }); } }; }
+    }, card);
+  } finally { global.document = realDoc; }
+  assert.ok(replaced, 'album card not replaced by its picture');
+  assert.strictEqual(replaced.className, 'jjr-img');
+  assert.strictEqual(replaced.src, 'https://i.imgur.com/59qIm1Al.jpg', 'not the low-res picture like other imgur pictures');
+  assert.strictEqual(replaced.getAttribute('data-full'), 'https://i.imgur.com/59qIm1A.jpeg', 'click does not open the full picture');
+});
+
+test('reader: ↓ pressed again right after moving to the next article does not reach PTT', function() {
+  var r = Object.create(PttReader.prototype);
+  var key = function(k, mod) { return { key: k, ctrlKey: !!mod, metaKey: false, altKey: false }; };
+  r.navFrom = { key: 'Gossiping|a|t', at: Date.now() };
+  ['ArrowDown', ' ', 'ArrowRight', 'Enter', 'PageDown', 'ArrowUp'].forEach(function(k) {
+    assert.ok(r.swallowsNavKey(key(k)), k + ' goes to PTT while it is still moving');
+  });
+  assert.ok(!r.swallowsNavKey(key('ArrowLeft')), '← (back to the list) is kept');
+  assert.ok(!r.swallowsNavKey(key('X')), 'X is kept');
+  assert.ok(!r.swallowsNavKey(key('ArrowDown', true)), 'browser shortcuts are kept');
+  r.navFrom = { key: 'Gossiping|a|t', at: Date.now() - PttReader.NAV_SWALLOW_MS - 10 };
+  assert.ok(!r.swallowsNavKey(key('ArrowDown')), 'keys are held back too long');
+  r.navFrom = null;
+  assert.ok(!r.swallowsNavKey(key('ArrowDown')), 'keys held back without a move');
+  var src = PttReader.prototype.ensureOverlay.toString();
+  var closed = src.slice(src.indexOf('if (!self.isOpen())'), src.indexOf('self.onKeyDown(e)'));
+  assert.ok(/swallowsNavKey\(e\)/.test(closed) && /stopPropagation/.test(closed), 'closed reader lets the keys through');
+});
+
+test('split URL: the terminal links both parts to the whole URL, and undoes it', function() {
+  var ctx = { SplitUrl: SplitUrl, console: console };
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'js/term_buf.js'), 'utf8'), ctx);
+  var cols = 80;
+  var row = function(text) {
+    var line = [];
+    for (var i = 0; i < cols; ++i) line.push({ ch: text.charAt(i) || ' ', partOfURL: false, startOfURL: false, endOfURL: false, fullurl: '' });
+    return line;
+  };
+  var pad = function(s) { while (s.length < 50) s += ' '; return s + ' 223.137.219.47 11/17 19:31'; };
+  var texts = ['推 orange7: https://houde-lawyer.com/%E6%9D%8E%E6%', '→ orange7: 83%A0%E6%9A%84/', '→ orange7: 也差太多了吧'];
+  var buf = { rows: 3, cols: cols, lineChangeds: [], lines: texts.map(function(t) { return row(pad(t)); }),
+    getRowText: function(r) { return this.lines[r].map(function(c) { return c.ch; }).join(''); } };
+  // what the URI pass found on the first line
+  var start = texts[0].indexOf('https'), end = texts[0].length;
+  buf.lines[0].uris = [[start, end]];
+  buf.lines[0][start].startOfURL = true;
+  buf.lines[0][start].fullurl = 'https://houde-lawyer.com/%E6%9D%8E%E6%';
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.strictEqual(buf.lines[0][start].fullurl, splitWhole, 'first part links to the cut URL');
+  var t = texts[1].indexOf('83');
+  var l1 = buf.lines[1];
+  assert.ok(l1[t].startOfURL && l1[t].partOfURL && l1[t + 14].endOfURL && l1[t + 14].partOfURL, 'rest of the URL is not a link');
+  assert.strictEqual(l1[t].fullurl, splitWhole);
+  assert.ok(!l1[t + 15].partOfURL && !l1[t - 1].partOfURL, 'link runs past the URL');
+  assert.strictEqual(JSON.stringify(l1.uris), JSON.stringify([[t, t + 15]]), 'the URI pass would not clear it');
+  assert.ok(!buf.lines[2].uris, 'the next push is not a link');
+  assert.ok(buf.lineChangeds[0] && buf.lineChangeds[1], 'rows not redrawn');
+  // the second push changes (e.g. scrolled): both parts go back
+  buf.lines[1] = row(pad('→ orange7: XD'));
+  buf.lineChangeds = [];
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.strictEqual(buf.lines[0][start].fullurl, 'https://houde-lawyer.com/%E6%9D%8E%E6%', 'first part still joined');
+  assert.ok(buf.lineChangeds[0], 'first row not redrawn');
+  // the first line goes away while the rest stays: its link goes too
+  buf.lines[0] = row(pad('推 someone: 哈哈'));
+  buf.lines[1] = row(pad(texts[1]));
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  buf.lines[0] = row(pad(texts[0]));
+  buf.lines[0].uris = [[start, end]];
+  buf.lines[0][start].startOfURL = true;
+  buf.lines[0][start].fullurl = 'https://houde-lawyer.com/%E6%9D%8E%E6%';
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.strictEqual(buf.lines[1][t].fullurl, splitWhole);
+  buf.lines[0] = row(pad('推 someone: 哈哈'));
+  ctx.TermBuf.prototype.joinSplitUrls.call(buf);
+  assert.ok(!buf.lines[1][t].partOfURL && !buf.lines[1].uris, 'rest of a URL still a link without its start');
+  var upd = fs.readFileSync(path.join(root, 'js/term_buf.js'), 'utf8');
+  var uca = upd.slice(upd.indexOf('updateCharAttr: function'), upd.indexOf('joinSplitUrls: function'));
+  assert.ok(/this\.joinSplitUrls\(\)/.test(uca), 'updateCharAttr does not join');
+});
+
+test('hover picture preview stays inside the window and off the mouse', function() {
+  var src = fs.readFileSync(path.join(root, 'js/pttchrome.js'), 'utf8');
+  var start = src.indexOf('pttchrome.App.picPreviewSide = ');
+  assert.ok(start >= 0, 'picPreviewSide missing');
+  var ctx = { pttchrome: { App: {} }, Math: Math };
+  vm.runInNewContext(src.slice(start, src.indexOf('\n};', start) + 3), ctx);
+  var side = ctx.pttchrome.App.picPreviewSide;
+  // the reported case: 679px window, mouse at 217, picture 608px wide
+  var p = side(217, 608, 679);
+  assert.strictEqual(p.right, true, 'more room on the right');
+  assert.ok(217 + 20 + p.maxWidth <= 679, 'runs past the right edge');
+  // mouse near the right edge: goes left, not over the mouse
+  p = side(600, 500, 679);
+  assert.strictEqual(p.right, false);
+  assert.ok(600 - 20 - p.maxWidth >= 0, 'runs past the left edge');
+  // small picture with room on the right stays on the right
+  assert.strictEqual(side(500, 100, 679).right, true);
+  assert.strictEqual(side(500, 100, 679).maxWidth, 155);
+  var upd = src.slice(src.indexOf('prototype.updatePicPreviewPosition'), start);
+  assert.ok(/'left:'\+left\+'px'/.test(upd) && !/curX\+20\)\+'px'/.test(upd), 'still always right of the mouse');
 });
 
 test('the settings page does not wipe the temporary blacklist list', function() {
@@ -1687,6 +2135,38 @@ test('Z 搜尋推文數 question on the bottom row: the filled list stays, no ke
     console.log = log;
   }
 });
+test('hidden 置底: ↓ on the last article stays there (no jump onto a hidden pinned post and back)', function() {
+  var log = console.log; console.log = function() {};
+  try {
+    var sent = [];
+    var lastRows = listScreen(range(780708, 780724), 3, 780724);
+    var v = listView(lastRows, sent);
+    v.updateListMap();
+    listView(listScreen(range(780688, 780707), 0, 780704), sent, v.pinFillState).updateListMap();
+    var atLast = listView(lastRows, sent, v.pinFillState);
+    atLast.updateListMap();
+    assert.ok(atLast.listAtLastBeforePinned(), 'cursor on the last article: ↓ would go onto a hidden pinned post');
+    var oneUp = listView(listScreen(range(780708, 780724), 3, 780723), sent, v.pinFillState);
+    oneUp.updateListMap();
+    assert.ok(!oneUp.listAtLastBeforePinned(), '↓ blocked one article before the last');
+    // last article at the bottom of a page, pinned posts on the next page:
+    // not known from this page, ↓ goes to PTT (it is pulled back as before)
+    var full = listView(listScreen(range(780705, 780724), 0, 780724), sent, v.pinFillState);
+    full.updateListMap();
+    assert.ok(!full.listAtLastBeforePinned(), '↓ blocked without pinned posts on the page');
+    // pinned posts shown: nothing to stop at
+    var shown = listView(lastRows, sent);
+    shown.bbscore.pref.values.hidePinned = false;
+    shown.updateListMap();
+    assert.ok(!shown.listAtLastBeforePinned(), '↓ blocked with the pinned posts on screen');
+  } finally {
+    console.log = log;
+  }
+  var src = TermView.prototype.onkeyDown.toString();
+  var down = src.slice(src.indexOf('case 40:'), src.indexOf('case 45:'));
+  assert.ok(/listAtLastBeforePinned\(\)/.test(down), '↓ does not check for the last article');
+});
+
 test('a page without pinned posts is shown as PTT draws it', function() {
   var v = listView(listScreen(range(780688, 780707), 0, 780700), []);
   v.updateListMap();
@@ -1758,6 +2238,966 @@ test('↓ held past the last article: the ↑ back is retried and the list is ne
     global.setTimeout = realSetTimeout;
   }
 });
+
+// ---- Android app: reading on the BBS when www.ptt.cc is down ----------------------
+
+test('BBS list rows: number, 推文數, date, author, title (Re/Fw), deleted, 置底', function() {
+  var r = JJPtt.parseArticleRow('  12345 +10 11/19 someone      □ [問卦] 測試標題');
+  assert.strictEqual(JJPtt.parseArticleRow(' 780705 + 3 11/12 user     □ [問卦] title').nrec, '3');
+  assert.deepStrictEqual(r, { num: 12345, nrec: '10', date: '11/19', author: 'someone', title: '[問卦] 測試標題', deleted: false });
+  r = JJPtt.parseArticleRow('>12346  爆 1/05 other        R:[新聞] 回文');
+  assert.strictEqual(r.num, 12346); assert.strictEqual(r.nrec, '爆'); assert.strictEqual(r.date, '1/05');
+  assert.strictEqual(r.title, 'Re: [新聞] 回文');
+  r = JJPtt.parseArticleRow('  12347  X111/19 third        轉 [轉錄] 轉的');
+  assert.strictEqual(r.nrec, 'X1'); assert.strictEqual(r.title, 'Fw: [轉錄] 轉的');
+  r = JJPtt.parseArticleRow('  12348 ~    11/19 -            □ (本文已被刪除) [someone]');
+  assert.ok(r.deleted);
+  r = JJPtt.parseArticleRow('   ★    11/12 mod      □ [公告] 板規');
+  assert.strictEqual(r.num, 0);
+  assert.strictEqual(JJPtt.parseArticleRow('【板主:abc】   看板《Test》'), null);
+});
+
+test('BBS list rows as PTT draws them: 推文數 runs into the date (fixed columns)', function() {
+  // pttbbs: "%6d", " " + mark + 2-column 推文數, then "%-6.5s" date
+  var p = JJPtt.parseArticleRow;
+  var r = p('  12345 + 311/19 someone      □ [問卦] 三推');
+  assert.strictEqual(r.nrec, '3'); assert.strictEqual(r.date, '11/19'); assert.strictEqual(r.num, 12345);
+  r = p('  12345 + 9 1/05 someone      □ [問卦] 九推');
+  assert.strictEqual(r.nrec, '9'); assert.strictEqual(r.date, '1/05');
+  r = p('  12346 +4211/19 someone      R:[問卦] 四十二推');
+  assert.strictEqual(r.nrec, '42'); assert.strictEqual(r.date, '11/19'); assert.strictEqual(r.title, 'Re: [問卦] 四十二推');
+  r = p('●780705  爆11/19 someone      □ [新聞] 爆');
+  assert.strictEqual(r.num, 780705); assert.strictEqual(r.nrec, '爆'); assert.strictEqual(r.date, '11/19');
+  r = p('  12347  XX11/19 someone      □ [問卦] 噓爆');
+  assert.strictEqual(r.nrec, 'XX');
+  r = p('  12348 +  11/19 someone      □ [問卦] 沒人推');
+  assert.strictEqual(r.nrec, ''); assert.strictEqual(r.date, '11/19');
+  r = p('  12349 !--11/19 someone      □ [問卦] 鎖文');
+  assert.strictEqual(r.nrec, ''); assert.strictEqual(r.date, '11/19');
+});
+
+test('BBS article lines -> a page like www.ptt.cc\'s (header, body with links, pushes)', function() {
+  var html = JJPtt.articleHtml([
+    ' 作者  tester (測試)                                  看板  Test',
+    ' 標題  [問卦] 測試',
+    ' 時間  Thu Nov 19 01:00:00 2026',
+    '───────────────────────────────────────',
+    '內文 <b> https://i.imgur.com/abcdefg.jpg',
+    '推 alice: 好文 https://x.y/z  1.2.3.4 11/19 01:02',
+    '→ bob: 補                           11/19 01:03'
+  ]);
+  assert.ok(html.indexOf('<span class="article-meta-tag">作者</span><span class="article-meta-value">tester (測試)</span>') >= 0);
+  assert.ok(html.indexOf('<span class="article-meta-tag">看板</span><span class="article-meta-value">Test</span>') >= 0);
+  assert.ok(html.indexOf('<span class="article-meta-value">[問卦] 測試</span>') >= 0);
+  assert.ok(html.indexOf('內文 &lt;b&gt; <a href="https://i.imgur.com/abcdefg.jpg">') >= 0, 'escaped, links kept');
+  assert.ok(html.indexOf('───') < 0, 'the line under the header is not in the body');
+  assert.ok(html.indexOf('<span class="push-tag">推 </span><span class="push-userid">alice</span><span class="push-content">: 好文 <a href="https://x.y/z">https://x.y/z</a></span><span class="push-ipdatetime"> 1.2.3.4 11/19 01:02') >= 0);
+  assert.ok(html.indexOf('<span class="push-userid">bob</span><span class="push-content">: 補</span><span class="push-ipdatetime"> 11/19 01:03') >= 0);
+});
+
+test('BBS article lines keep their colours: spans like www.ptt.cc\'s, read by the reader', function() {
+  // a fake screen row: [text, fg, bg, bright] runs; 中 is a double-byte character
+  var mk = function(runs) {
+    var row = [];
+    runs.forEach(function(r) {
+      r[0].split('').forEach(function(ch) {
+        var a = { fg: r[1], bg: r[2], bright: !!r[3], invert: false };
+        if (ch === '中') { row.push(Object.assign({ ch: 'x', isLeadByte: true }, a)); row.push(Object.assign({ ch: 'y' }, a)); }
+        else row.push(Object.assign({ ch: ch }, a));
+      });
+    });
+    while (row.length < 20) row.push({ ch: ' ', fg: 7, bg: 0, bright: false });
+    return row;
+  };
+  var buf = { cols: 20, lines: [
+    mk([['plain ', 7, 0], ['red', 1, 0, 1], [' 中', 3, 4]]),
+    mk([['see https://a.b/c', 7, 0]]),
+    mk([['bar  ', 7, 2]])
+  ], getRowText: function() { return '中'; } };
+  var h0 = JJPtt.rowHtml(buf, 0);
+  assert.strictEqual(h0, 'plain <span class="f1 hl b0">red</span><span class="f3 b4"> 中</span>');
+  assert.strictEqual(JJPtt.rowHtml(buf, 1), 'see <a href="https://a.b/c">https://a.b/c</a>', 'trailing blanks on black dropped, URL linked');
+  assert.strictEqual(JJPtt.rowHtml(buf, 2), '<span class="f7 b2">bar  </span>', 'a coloured background keeps its blanks');
+  var lines = [' 作者  t (t)', ' 標題  x', ' 時間  y', '───────────────────', 'plain red  中'];
+  lines.html = [];
+  lines.html[4] = h0;
+  var html = JJPtt.articleHtml(lines);
+  assert.ok(html.indexOf('<span class="f1 hl b0">red</span>') >= 0);
+  var st = PttReader.colorState({ getAttribute: function(a) { return a === 'class' ? 'f3 b4' : null; } }, { fg: 7, bg: 0, hl: false });
+  assert.strictEqual(st.fg, 3); assert.strictEqual(st.bg, 4); assert.strictEqual(st.hl, false);
+  st = PttReader.colorState({ getAttribute: function(a) { return a === 'class' ? 'f1 hl b0' : null; } }, { fg: 7, bg: 0, hl: false });
+  assert.ok(st.fg === 1 && st.hl, 'the reader sees the colour');
+});
+
+test('BBS board page -> index HTML with jjterm: links, older page below the lowest number', function() {
+  var html = JJPtt.indexHtml('Test', [{ num: 5, nrec: '', date: '11/19', author: 'a', title: 't5' },
+                                      { num: 6, nrec: '', date: '11/19', author: '-', title: '(本文已被刪除)', deleted: true }], 'jjterm:list/Test/5');
+  assert.ok(html.indexOf('<a href="jjterm:art/Test/5#a/t5">t5</a>') >= 0, 'the author and title come along');
+  assert.ok(html.indexOf('jjterm:art/Test/6') < 0, 'a deleted article has no link');
+  assert.ok(html.indexOf('href="jjterm:list/Test/5">‹ 上頁') >= 0);
+  assert.strictEqual(JJMobile.webUrl('jjterm:art/Test/5'), 'jjterm:art/Test/5');
+  assert.strictEqual(JJMobile.webUrl('/bbs/Test/index.html'), 'https://www.ptt.cc/bbs/Test/index.html');
+});
+
+testAsync('BBS article: Enter, every page by Page Down until 100%, back with q', async function() {
+  var LIST = '【板主:x】  看板《Test》\n>  5 + 1 11/19 tester  □ [問卦] 測試\n\n\n\n';
+  var f = fakePtt([
+    [LIST, { '\r': 1 }],
+    [' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行', { '\x1b[6~': 2 }],
+    ['第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行', { 'q': 3 }],
+    [LIST, {}]
+  ]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var lines = await f.ptt.readHere();
+  assert.deepStrictEqual(f.typed, ['\r', '\x1b[6~', 'q']);
+  assert.strictEqual(lines.length, 9);
+  assert.strictEqual(lines[4], '第一行');
+  assert.strictEqual(lines[8], '→ bob: 補 11/19 01:03');
+});
+
+test('BBS search: www.ptt.cc search?q= as PTT\'s own keys (a / Z /), its addresses and links', function() {
+  var c = JJPtt.searchCmd('author:alice');
+  assert.strictEqual(c.key, 'a'); assert.strictEqual(c.text, 'alice');
+  assert.ok(c.ask.test('搜尋作者: ') && c.ask.test('增加條件 作者: '));
+  c = JJPtt.searchCmd('recommend:-100');
+  assert.strictEqual(c.key, 'Z'); assert.strictEqual(c.text, '-100');
+  assert.ok(c.ask.test('搜尋推文數高於多少 (<0則搜噓文數) 的文章: '));
+  c = JJPtt.searchCmd(' 颱風 假 ');
+  assert.strictEqual(c.key, '/'); assert.strictEqual(c.text, '颱風 假'); assert.ok(c.ask.test('搜尋標題: '));
+  assert.strictEqual(JJPtt.searchCmd(''), null);
+  assert.strictEqual(JJPtt.searchCmd('recommend:0'), null);
+  assert.deepStrictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Gossiping/search?q=recommend%3A100'),
+    { board: 'Gossiping', query: 'recommend:100', before: 0, page: 1 });
+  assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/search?page=2&q=a+b').page, 2);
+  assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/search?page=2&q=a+b').query, 'a b');
+  assert.deepStrictEqual(PttReader.termSearch('jjterm:search/Test/40/' + encodeURIComponent('author:bob')),
+    { board: 'Test', query: 'author:bob', before: 40, page: 1 });
+  assert.strictEqual(PttReader.termSearch('https://www.ptt.cc/bbs/Test/index.html'), null);
+  var html = JJPtt.indexHtml('Test', [{ num: 3, nrec: '爆', date: '11/19', author: 'a', title: 't' }], '', 'recommend:100');
+  assert.ok(html.indexOf('href="jjterm:art/Test/3/recommend%3A100#a/t"') >= 0, 'opened inside the search');
+  html = JJPtt.indexHtml('Test', [{ num: 3, nrec: '爆', date: '11/19', author: 'I26921216', title: '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700/公斤' }], '', 'recommend:100');
+  var href = /href="([^"]+)"/.exec(html)[1].replace(/&amp;/g, '&');
+  assert.deepStrictEqual(JJPtt.wantFromUrl(href), { author: 'I26921216', title: '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700/公斤' });
+  assert.strictEqual(PttReader.articleUrl(href), 'jjterm:art/Test/3/recommend%3A100', 'the same article key as before');
+  assert.strictEqual(JJPtt.wantFromUrl('jjterm:art/Test/3'), null);
+});
+
+testAsync('BBS search: into the board, the search key, its prompt, the words; the list newest first', async function() {
+  var LIST = '【板主:x】  看板《Test》  文章選讀\n  1 + 511/19 a  □ [問卦] 舊\n  2 + 311/19 b  □ [問卦] 新\n\n 文章選讀 (y)回應';
+  var ASK = LIST.replace(' 文章選讀 (y)回應', '搜尋推文數高於多少 (<0則搜噓文數) 的文章: ');
+  var HITS = '【板主:x】  看板《Test》  文章選讀\n  1 + 511/19 a  □ [問卦] 舊\n  2 + 311/19 b  □ [問卦] 新\n\n 文章選讀 (y)回應 ';
+  var f = fakePtt([[LIST, { 'Z': 1 }], [ASK, { '3\r': 2, '3': 1 }], [HITS, { '\x1b[4~': 2 }]]);
+  f.app.buf.rows = 5;
+  f.app.conn.isConnected = true;
+  f.ptt.user = 'me';
+  f.ptt.ensureIn = function() { return Promise.resolve(); };
+  var html = await f.ptt.boardPage('Test', 0, 'recommend:3');
+  assert.strictEqual(f.typed[0], 'Z');
+  assert.strictEqual(f.ptt.listQuery, 'recommend:3');
+  assert.ok(html.indexOf('jjterm:art/Test/2/recommend%3A3') < html.indexOf('jjterm:art/Test/1/recommend%3A3'), 'newest first');
+});
+
+testAsync('BBS search with nothing found: the message is closed, an empty list (not the whole board\'s)', async function() {
+  var LIST = '【板主:x】  看板《Test》  文章選讀\n  1 + 511/19 a  □ [問卦] 舊\n\n\n 文章選讀 (y)回應';
+  var ASK = LIST.replace(' 文章選讀 (y)回應', '搜尋標題: ');
+  var NONE = LIST.replace(' 文章選讀 (y)回應', '找不到符合條件的文章。     請按任意鍵繼續');
+  var f = fakePtt([[LIST, { '/': 1 }], [ASK, { 'zzz\r': 2 }], [NONE, { ' ': 3 }], [LIST + ' ', {}]]);
+  f.app.buf.rows = 5;
+  f.app.conn.isConnected = true;
+  f.ptt.user = 'me';
+  f.ptt.ensureIn = function() { return Promise.resolve(); };
+  var html = await f.ptt.boardPage('Test', 0, 'zzz');
+  assert.ok(html.indexOf('r-ent') < 0, 'no rows');
+  assert.ok(!f.ptt.listQuery, 'not in a search');
+  assert.strictEqual(f.typed[f.typed.length - 1], ' ', 'the message closed');
+});
+
+testAsync('BBS article already open further down: Home to the first page, then every page', async function() {
+  var P1 = ' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var P2 = '第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行';
+  var f = fakePtt([[P2, { '\x1b[1~': 1 }], [P1, { '\x1b[6~': 2 }], [P2, { '\x1b[1~': 1 }]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var lines = await f.ptt.readPages();
+  assert.deepStrictEqual(f.typed, ['\x1b[1~', '\x1b[6~']);
+  assert.strictEqual(lines[0], ' 作者  tester (測試)    看板  Test');
+  assert.strictEqual(lines[7], '推 alice: 好文 1.2.3.4 11/19 01:02');
+});
+
+testAsync('BBS article: each page is handed over as it comes; false stops the paging', async function() {
+  var P1 = ' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var P2 = '第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行';
+  var f = fakePtt([[P1, { '\x1b[6~': 1 }], [P2, {}]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var seen = [];
+  var lines = await f.ptt.readPages(function(n, total, sofar) { seen.push([n, total, sofar.length]); });
+  assert.deepStrictEqual(seen, [[1, 2, 5], [2, 2, 9]]);
+  assert.ok(!lines.stopped);
+  var g = fakePtt([[P1, { '\x1b[6~': 1 }], [P2, {}]]);
+  g.app.buf.rows = 6;
+  g.app.conn.isConnected = true;
+  lines = await g.ptt.readPages(function() { return false; });
+  assert.ok(lines.stopped);
+  assert.deepStrictEqual(g.typed, [], 'no Page Down after stopping');
+});
+
+testAsync('BBS article: a page still being drawn (status line not moved on yet) is not read as the next one', async function() {
+  var P1 = ' 作者  tester (測試)    看板  Test\n 標題  [問卦] 測試\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var HALF = '第一行\n第二行\n 時間  Thu Nov 19 01:00:00 2026\n──────────────────\n第一行\n 瀏覽 第 1/2 頁 ( 50%)  目前顯示: 第 01~05 行';
+  var P2 = '第一行\n第二行\n--\n推 alice: 好文 1.2.3.4 11/19 01:02\n→ bob: 補 11/19 01:03\n 瀏覽 第 2/2 頁 (100%)  目前顯示: 第 05~09 行';
+  var f = fakePtt([[P1, { '\x1b[6~': 1 }], [HALF, {}, { after: 30, to: 2 }], [P2, {}]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  var lines = await f.ptt.readPages();
+  assert.strictEqual(lines[0], ' 作者  tester (測試)    看板  Test', 'page 1 not overwritten by the half-drawn screen');
+  assert.strictEqual(lines[1], ' 標題  [問卦] 測試');
+  assert.strictEqual(lines[7], '推 alice: 好文 1.2.3.4 11/19 01:02');
+});
+
+testAsync('reading ahead on the BBS gives way to what the user opens', async function() {
+  var f = fakePtt([['x', {}]]);
+  f.ptt.user = 'tester';
+  f.ptt.ensureIn = function() { return Promise.resolve(); };
+  f.ptt.toArticle = function() { return Promise.resolve(); };
+  var pages = 0;
+  f.ptt.readHere = function(onPage) {
+    var go = function() {
+      ++pages;
+      if (onPage(pages, 10, []) === false || pages >= 10) return Promise.resolve([]);
+      if (pages === 2) f.ptt.run(function() { return Promise.resolve('fg'); });  // the user opens another
+      return Promise.resolve().then(go);
+    };
+    return go();
+  };
+  await assert.rejects(f.ptt.termArticle('https://www.ptt.cc/bbs/Test/M.1.A.2.html', null, { bg: true }), function(e) { return e.yielded; });
+  assert.strictEqual(pages, 3, 'stopped on the page after the other job came');
+  pages = 0;
+  f.ptt.run(function() { return Promise.resolve(); });
+  var r = await f.ptt.termArticle('https://www.ptt.cc/bbs/Test/M.1.A.2.html', null, {});
+  assert.strictEqual(pages, 10, 'not read ahead: read to the end');
+  assert.ok(r.html);
+});
+
+testAsync('app: an article being read ahead shows its pages when opened; one that gave way is read again', async function() {
+  var calls = [];
+  var m = Object.create(JJMobile.prototype);
+  m.articles = {};
+  m.app = { reader: { fetchArticle: function(url, opts) {
+    calls.push(opts.bg);
+    if (opts.bg) {
+      opts.onPartial({ part: 1 }, 1, 3);
+      var e = new Error('讓給前面的工作'); e.yielded = true;
+      return new Promise(function(res, rej) { setTimeout(function() { rej(e); }, 5); });
+    }
+    opts.onPartial({ part: 2 }, 2, 3);
+    return Promise.resolve({ done: true });
+  } } };
+  m.getArticle('u', null, true).catch(function() {});
+  var seen = [];
+  var a = await m.getArticle('u', function(x, i) { seen.push(i); });
+  assert.deepStrictEqual(a, { done: true });
+  assert.deepStrictEqual(calls, [true, false]);
+  assert.deepStrictEqual(seen, [1, 2], 'the page already read, then the new read');
+});
+
+testAsync('app: an article read ahead a while ago is read again and drawn again when it has more pushes', async function() {
+  var m = Object.create(JJMobile.prototype);
+  m.articles = {};
+  var asked = [];
+  var fresh = { url: 'jjterm:art/Test/5', fromTerm: true, pushes: [1, 2, 3] };
+  m.app = { reader: { fetchArticle: function(url) { asked.push(url); return Promise.resolve(fresh); } } };
+  var old = { url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', fromTerm: true, pushes: [1] };
+  var drawn = [];
+  m.fillArticle = function(screen, a) { screen.article = a; drawn.push(a); };
+  var view = { isConnected: true, scrollTop: 300, innerHTML: 'x' };
+  var screen = { view: view, article: old };
+  m.articles['jjterm:art/Test/5'] = { at: Date.now() - 5000, promise: Promise.resolve(old) };
+  assert.ok(!m.freshen(screen, old, 'jjterm:art/Test/5'), 'just read: as it is');
+  m.articles['jjterm:art/Test/5'].at = Date.now() - JJMobile.STALE_MS - 1;
+  assert.ok(m.freshen(screen, old, 'jjterm:art/Test/5'));
+  await new Promise(function(res) { setTimeout(res, 5); });
+  assert.deepStrictEqual(asked, ['jjterm:art/Test/5'], 'on the BBS: no ?_= added');
+  assert.deepStrictEqual(drawn, [fresh]);
+  assert.strictEqual(view.scrollTop, 300, 'the place kept');
+  assert.strictEqual(fresh.url, old.url, 'the web address kept for pushing');
+  // web: past the cache; no more pushes: not drawn again
+  m.articles['https://x/1.html'] = { at: 0, promise: Promise.resolve(old) };
+  fresh.pushes = [1];
+  screen.article = old;
+  assert.ok(m.freshen(screen, { pushes: [1] }, 'https://x/1.html'));
+  assert.ok(/^https:\/\/x\/1\.html\?_=\d+$/.test(asked[1]));
+});
+
+test('app: the pushes heading counts 推 / 噓 / → (the list shows 推 minus 噓)', function() {
+  var ps = [{ tag: '推' }, { tag: '推' }, { tag: '→' }, { tag: '噓' }];
+  assert.strictEqual(JJMobile.pushTally(ps), '推文 4　推 2・噓 1・→ 1');
+  assert.strictEqual(JJMobile.pushTally([]), '推文 0');
+});
+
+test('app: www.ptt.cc down is kept over a restart; other kinds down -> a shorter wait', function() {
+  var isApp = lib.isApp, store = {};
+  global.localStorage = { getItem: function(k) { return k in store ? store[k] : null; }, setItem: function(k, v) { store[k] = String(v); } };
+  try {
+    lib.isApp = function() { return true; };
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/index.html');
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.loadWebDown();
+    assert.ok(PttReader.webRecentlyDown('list'), 'remembered');
+    assert.ok(!PttReader.webRecentlyDown('article'));
+    assert.ok(PttReader.webRecentlyDown(), 'something down: the article page is given ' + PttReader.WEB_TIMEOUT_SHORT_MS + ' ms');
+    assert.ok(/WEB_TIMEOUT_SHORT_MS/.test(PttReader.prototype.webDocTimed.toString()));
+    assert.ok(/ptt\.loggingIn/.test(PttReader.prototype.fetchDoc.toString()), 'still logging in: to the BBS, waiting for it');
+    PttReader.markWebUp('https://www.ptt.cc/bbs/Test/index.html');
+    PttReader.webDownBy = {}; PttReader.loadWebDown();
+    assert.ok(!PttReader.webRecentlyDown('list'), 'back up: forgotten');
+  } finally {
+    lib.isApp = isApp;
+    delete global.localStorage;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+testAsync('app: reading ahead skips 置底 and starts while the app is still logging in (www.ptt.cc down)', async function() {
+  var isApp = lib.isApp;
+  try {
+    lib.isApp = function() { return true; };
+    var m = Object.create(JJMobile.prototype);
+    var read = [];
+    m.getArticle = function(url) { read.push(url); return Promise.resolve({}); };
+    var ptt = { user: '', loggingIn: Promise.resolve() };
+    m.app = { pref: { values: { readerPrefetchCount: 3 } },
+              reader: { termSource: function() { return ptt; }, preloadMedia: function() {} } };
+    var screen = { entries: [{ url: 'jjterm:art/Gossiping/0#a/p1', pinned: true }, { url: 'jjterm:art/Gossiping/0#a/p2', pinned: true },
+                             { url: 'jjterm:art/Gossiping/9#a/t9' }, { url: '' }, { url: 'jjterm:art/Gossiping/8#a/t8' },
+                             { url: 'jjterm:art/Gossiping/7#a/t7' }, { url: 'jjterm:art/Gossiping/6#a/t6' }] };
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Gossiping/M.1.A.2.html');
+    m.prefetchList(screen, 0);
+    for (var i = 0; i < 10; ++i) await Promise.resolve();
+    assert.deepStrictEqual(read, ['jjterm:art/Gossiping/9#a/t9', 'jjterm:art/Gossiping/8#a/t8', 'jjterm:art/Gossiping/7#a/t7'],
+      'the newest first, no 置底, while logging in');
+    read = [];
+    ptt.loggingIn = null;
+    m.prefetchList(screen, 0);
+    for (i = 0; i < 10; ++i) await Promise.resolve();
+    assert.deepStrictEqual(read, [], 'not logged in and not logging in: nothing on the BBS');
+  } finally {
+    lib.isApp = isApp;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+testAsync('extension: a copy read ahead on the hidden connection a while ago is marked stale', async function() {
+  var r = new PttReader({ conn: {} });
+  var a = { url: 'u', meta: { '時間': '' }, pushes: [] };
+  r.prefetch = { k: { board: 'test', author: 'a1', title: PttReader.prefetchKey('', '', 't1').slice(2), bg: true, done: true,
+                      at: Date.now() - 60000, doneAt: Date.now() - PttReader.STALE_MS - 1, promise: Promise.resolve(a) } };
+  var p = r.takePrefetch({ board: 'Test', author: 'a1', title: 't1', time: '' });
+  assert.ok(p.stale);
+  assert.strictEqual(await p, a);
+  r.prefetch = { k: { board: 'test', author: 'a1', title: PttReader.prefetchKey('', '', 't1').slice(2), bg: true, done: true,
+                      at: Date.now() - 60000, doneAt: Date.now() - 1000, promise: Promise.resolve(a) } };
+  assert.ok(!r.takePrefetch({ board: 'Test', author: 'a1', title: 't1', time: '' }).stale, 'just read');
+  assert.ok(/pre\.stale\) self\.refreshFromTerminal/.test(PttReader.prototype.openFor.toString()));
+});
+
+test('extension reading mode: www.ptt.cc down -> read the article in the terminal (not in the app, not for 404)', function() {
+  var isApp = lib.isApp;
+  try {
+    var r = new PttReader({ conn: {}, buf: { pageState: 3 } });
+    var e500 = new Error('HTTP 500'); e500.webStatus = 500;
+    var e404 = new Error('HTTP 404'); e404.webStatus = 404;
+    lib.isApp = function() { return false; };
+    assert.ok(r.canReadTerminal(e500));
+    assert.ok(r.canReadTerminal(new TypeError('Failed to fetch')));
+    assert.ok(!r.canReadTerminal(e404));
+    r.app.buf.pageState = 2;
+    assert.ok(!r.canReadTerminal(e500), 'only with the article open in the terminal');
+    r.app.buf.pageState = 3;
+    lib.isApp = function() { return true; };
+    assert.ok(!r.canReadTerminal(e500), 'the app reads on its own connection');
+    assert.ok(/canReadTerminal\(e\)/.test(PttReader.prototype.openFor.toString()), 'openFor falls back');
+    assert.ok(/canReadTerminal\(err\)/.test(PttReader.prototype.waitForPush.toString()), 'after a push too');
+  } finally {
+    lib.isApp = isApp;
+  }
+});
+
+testAsync('hidden connection: a number from a filtered list lands elsewhere -> found among the author\'s posts', async function() {
+  var LIST = '【板主:x】  看板《Test》\n>  14295 + 3 11/03 ii49     □ [新聞] 舊的\n';
+  var AFTER = '【板主:x】  看板《Test》\n  14295 + 3 11/03 ii49     □ [新聞] 舊的\n 請輸入欲搜尋的作者:';
+  // the search done: its footer back at the bottom (系列文章)
+  var FOUND = '【板主:x】  系列《Test》\n     12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n>    13   11/18 Ho1liday  □ [問卦] 別篇\n 系列文章  (y)回應';
+  var ON = '【板主:x】  系列《Test》\n>    12 + 5 11/18 Ho1liday  □ [問卦] 光電水為何在脆上燒起來了?\n     13   11/18 Ho1liday  □ [問卦] 別篇\n 系列文章  (y)回應';
+  var f = fakePtt([[LIST, { 'a': 1 }], [AFTER, { 'Ho1liday\r': 2 }], [FOUND, { '12\r': 3 }], [ON, {}]]);
+  f.app.buf.rows = 6;
+  f.app.conn.isConnected = true;
+  await f.ptt.cursorTo(14295, { author: 'Ho1liday', title: '[問卦] 光電水為何在脆上燒起來了?' });
+  assert.deepStrictEqual(f.typed, ['14295\r', 'a', 'Ho1liday\r', '12\r']);
+  assert.ok(JJPtt.sameTitle('Re: [問卦] 光電水為何在脆上燒起', '[問卦] 光電水為何在脆上燒起來了?'), 'cut at the screen edge');
+  assert.ok(!JJPtt.sameTitle('[問卦] 別篇', '[問卦] 光電水為何在脆上燒起來了?'));
+});
+
+testAsync('BBS list: PTT opens another article than the row -> not shown, found among the author\'s posts', async function() {
+  var mk = function(author, title) {
+    return [' 作者  ' + author + ' (暱稱)                                   看板  Gossiping', ' 標題  ' + title, ' 時間  Thu Nov 19 08:39:00 2026', '', '內文'];
+  };
+  var WRONG = mk('Taiwan007', '[新聞]普發2萬藍力拚20日三讀　賴清德點3疑慮');
+  var RIGHT = mk('I26921216', '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤');
+  var want = { author: 'I26921216', title: '[新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤' };
+  var setup = function(reads) {
+    var p = Object.create(JJPtt.prototype), calls = [];
+    p.run = function(f) { return Promise.resolve().then(f); };
+    p.ensureIn = p.toList = p.wait = p.settle = function() { return Promise.resolve(); };
+    p.send = function() {};
+    p.screen = function() { return '文章網址: https://www.ptt.cc/bbs/Gossiping/M.1.A.2.html'; };
+    p.cursorTo = function(n, w, byAuthor) { calls.push([n, w && w.author, !!byAuthor]); return Promise.resolve(); };
+    p.readHere = function(onPage) { var l = reads.shift(); onPage(1, 1, l); return Promise.resolve(l); };
+    return { p: p, calls: calls };
+  };
+  var f = setup([WRONG, RIGHT]), drawn = [];
+  var r = await f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, { onPage: function(i, n, l) { drawn.push(l[1]); } });
+  assert.deepStrictEqual(f.calls, [[3, 'I26921216', false], [3, 'I26921216', true]], 'again among the author\'s posts');
+  assert.deepStrictEqual(drawn, [RIGHT[1]], 'the wrong one never drawn');
+  assert.ok(r.html.indexOf('雷門大燈籠') >= 0 && r.html.indexOf('普發') < 0);
+  f = setup([WRONG, WRONG]);
+  await assert.rejects(f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, {}), /開到別篇/);
+  f = setup([RIGHT]);
+  r = await f.p.termArticle('jjterm:art/Gossiping/3/recommend%3A100', want, {});
+  assert.deepStrictEqual(f.calls, [[3, 'I26921216', false]], 'the right one: once');
+  assert.ok(JJPtt.linesAre(mk('i26921216', 'Re: [新聞] 女子打卡竟拉扯「雷門大燈籠」 700公斤'), { author: 'I26921216', title: 'Re: [新聞] 女子打卡竟拉扯「雷門大燈籠」' }));
+});
+
+testAsync('BBS: the AID landing on another article (the list still in a search) -> out of the search and again; never the wrong one', async function() {
+  var WANT = 'https://www.ptt.cc/bbs/Gossiping/M.1794600000.A.123.html';
+  var NEAR = 'https://www.ptt.cc/bbs/Gossiping/M.1794618914.A.E04.html';
+  var setup = function(inSearch, stuck, miss) {
+    var p = Object.create(JJPtt.prototype), sent = [], q = false, cur = '';
+    p.app = {};
+    p.listQuery = '';
+    p.toBoard = function() { return Promise.resolve(); };
+    p.wait = p.settle = function() { return Promise.resolve(); };
+    p.screen = function() {
+      return q ? '│ 文章網址: ' + cur.replace(/^https/, 'http') + ' │' : '列表\n' + (inSearch ? ' 系列文章  (y)回應' : ' 文章列表  (y)回應');
+    };
+    p.send = function(k) {
+      sent.push(k);
+      if (k === 'Q') q = true;
+      else if (k === ' ') q = false;
+      else if (k === '\x1b[D' && !stuck) inSearch = false;
+      else if (/\r$/.test(k)) cur = inSearch || miss-- > 0 ? NEAR : WANT;
+    };
+    return { p: p, sent: sent };
+  };
+  var f = setup(true);
+  await f.p.toArticle(WANT);
+  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ', '\x1b[D', '#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ']);
+  f = setup(false);
+  await f.p.toArticle(WANT);
+  assert.deepStrictEqual(f.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' '], 'right at once (two jumps): no more keys');
+  // landed elsewhere in the whole list: tried again without ← (which would leave the board)
+  var g = setup(false, false, 2);  // both jumps land elsewhere
+  await g.p.toArticle(WANT);
+  assert.deepStrictEqual(g.sent, ['#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' ', '#', JJPtt.aidFromUrl(WANT) + '\r', '#', JJPtt.aidFromUrl(WANT) + '\r', 'Q', ' '], 'no ← outside a search');
+  f = setup(true, true);
+  await assert.rejects(f.p.toArticle(WANT), /跳到別篇/);
+  assert.ok(JJPtt.sameArticle('http://www.ptt.cc/bbs/Gossiping/M.1.A.ABC.html', 'https://www.ptt.cc/bbs/Gossiping/M.1.A.abc.html?_=1'));
+  assert.ok(!JJPtt.sameArticle('', ''));
+});
+
+testAsync('BBS list: the footer tells a search (系列文章) from the whole list (文章列表), whatever listQuery says', async function() {
+  var HEAD = '【板主:x】  看板《Gossiping》\n   編號    日 期 作  者       文  章  標  題\n>779951  1111/19 end56        □ [問卦] 把228\n';
+  var SEARCH = HEAD + ' 系列文章  (^P)發表 (y)回應 (X)推文 (d)刪除 (→)閱讀 (b)進板  (←)離開';
+  var WHOLE = HEAD + ' 文章列表  (^P)發表 (y)回應 (X)推文 (d)刪除 (→)閱讀 (b)進板  (←)離開 (h)說明';
+  var p = Object.create(JJPtt.prototype), sent = [], now = SEARCH;
+  p.app = {};
+  p.screen = function() { return now; };
+  p.settle = function() { return Promise.resolve(true); };
+  p.send = function(k) { sent.push(k); if (k === '\x1b[D') now = WHOLE; };
+  p.listQuery = '';  // out of date: a job stopped half way
+  assert.strictEqual(p.listFoot(), 'search');
+  assert.ok(p.inList('Gossiping'), 'the current footers count as the list');
+  await p.toBoard('Gossiping');
+  assert.deepStrictEqual(sent, ['\x1b[D'], 'out of the search first (s would keep it)');
+  sent.length = 0;
+  await p.toBoard('Gossiping');
+  assert.deepStrictEqual(sent, [], 'the whole list: nothing to do');
+  p.listQuery = 'recommend:100';
+  assert.strictEqual(p.listFoot(), 'list');
+  var asked = [];
+  p.toBoard = function() { asked.push('toBoard'); return Promise.reject(new Error('stop')); };
+  await assert.rejects(p.toList('Gossiping', 'recommend:100'), /stop/);
+  assert.deepStrictEqual(asked, ['toBoard'], 'listQuery says searched, the footer says the whole list: searched again');
+});
+
+testAsync('app: a list read on the BBS (jjterm: links) is read ahead though articles were never marked down', async function() {
+  var isApp = lib.isApp;
+  try {
+    lib.isApp = function() { return true; };
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    var m = Object.create(JJMobile.prototype), read = [];
+    m.getArticle = function(url) { read.push(url); return Promise.resolve({}); };
+    m.app = { pref: { values: { readerPrefetchCount: 2 } },
+              reader: { termSource: function() { return { user: 'u' }; }, preloadMedia: function() {} } };
+    m.prefetchList({ entries: [{ url: 'jjterm:art/G/9#a/t9' }, { url: 'jjterm:art/G/8#a/t8' }, { url: 'jjterm:art/G/7#a/t7' }] }, 0);
+    for (var i = 0; i < 10; ++i) await Promise.resolve();
+    assert.deepStrictEqual(read, ['jjterm:art/G/9#a/t9', 'jjterm:art/G/8#a/t8'], 'as many as the setting');
+  } finally {
+    lib.isApp = isApp;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+testAsync('app: list pages within a minute come from the cache, a reload reads again, a failure is not kept', async function() {
+  var m = Object.create(JJMobile.prototype), asked = [], fail = false;
+  m.app = { reader: { fetchDoc: function(url) { asked.push(url); return fail ? Promise.reject(new Error('x')) : Promise.resolve({ url: url }); } } };
+  var a = await m.listDoc('u1');
+  assert.strictEqual(await m.listDoc('u1'), a, 'the same page again: cached');
+  await m.listDoc('u1', true);
+  assert.deepStrictEqual(asked, ['u1', 'u1'], 'fresh: asked again');
+  m.listDocs.u1.at = Date.now() - JJMobile.LIST_CACHE_MS - 1;
+  await m.listDoc('u1');
+  assert.strictEqual(asked.length, 3, 'a minute old: asked again');
+  fail = true;
+  await assert.rejects(m.listDoc('u2'));
+  fail = false;
+  await m.listDoc('u2');
+  assert.strictEqual(asked.length, 5, 'a failure is not kept');
+});
+
+testAsync('app: a board\'s one-tap 推文數 searches are read ahead one at a time, not while search is down', async function() {
+  var m = Object.create(JJMobile.prototype), asked = [];
+  m.app = { reader: { fetchDoc: function(url) { asked.push(url); return Promise.resolve({}); } } };
+  PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  try {
+    m.prefetchSearches('Gossiping');
+    assert.strictEqual(asked.length, 1, 'one at a time');
+    for (var i = 0; i < 20; ++i) await Promise.resolve();
+    assert.deepStrictEqual(asked, JJMobile.QUICK_PUSH.map(function(q) {
+      return 'https://www.ptt.cc/bbs/Gossiping/search?q=recommend%3A' + q[0];
+    }));
+    var before = asked.length;
+    m.prefetchSearches('Gossiping');
+    for (i = 0; i < 20; ++i) await Promise.resolve();
+    assert.strictEqual(asked.length, before, 'read a moment ago: not again');
+    PttReader.webDownBy.search = PttReader.webDownAt = Date.now();
+    m.prefetchSearches('Stock');
+    assert.strictEqual(asked.length, before, 'search failing: nothing');
+  } finally {
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+test('app: 熱門看板 rows read from www.ptt.cc', function() {
+  var node = function(kids) {
+    return { querySelector: function(sel) { return kids[sel] || null; } };
+  };
+  var doc = { querySelectorAll: function() {
+    return [node({ '.board-name': { textContent: ' Gossiping ' }, '.board-nuser': { textContent: ' 9999 ' },
+                   '.board-title': { textContent: '◎[八卦] 測試' } }), node({})];
+  } };
+  assert.deepStrictEqual(JJMobile.parseHot(doc), [['Gossiping', '[八卦] 測試', '9999']]);
+});
+
+test('BBS search: what PTT filled in after the question is erased first', function() {
+  var ask = JJPtt.searchCmd('recommend:100').ask;
+  assert.strictEqual(JJPtt.filledIn('x\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: 10      ', ask), 2);
+  assert.strictEqual(JJPtt.filledIn('x\n搜尋推文數高於多少 (<0則搜噓文數) 的文章:      ', ask), 0);
+  assert.strictEqual(JJPtt.filledIn('x\n 文章列表  (^P)發表', ask), 0, 'no question: nothing');
+  assert.strictEqual(JJPtt.filledIn('x\n[Gossiping] 搜尋標題: 柯文哲', JJPtt.searchCmd('柯').ask), 6, 'double-byte: 2 each');
+});
+
+test('BBS search: 推文數 beyond 100 (止爆 200) as 100, PTT counting no further', function() {
+  assert.strictEqual(JJPtt.searchCmd('recommend:200').text, '100');
+  assert.strictEqual(JJPtt.searchCmd('recommend:-300').text, '-100');
+  assert.strictEqual(JJPtt.searchCmd('recommend:50').text, '50');
+});
+
+testAsync('BBS search: Backspaces before the words though what PTT filled in is not on the screen yet', async function() {
+  var p = Object.create(JJPtt.prototype), keys = [];
+  var now = '【板主:x】  看板《Gossiping》\n 1 a\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: ';
+  p.screen = function() { return now; };
+  p.toBoard = p.wait = function() { return Promise.resolve(); };
+  p.send = function(k) { keys.push(k); };
+  p.type = function(k) { keys.push(k); now = '【板主:x】  系列《Gossiping》\n 1 a\n 系列文章  (y)回應'; };
+  p.searched = function() { return Promise.resolve('done'); };
+  await p.toList('Gossiping', 'recommend:100');
+  assert.deepStrictEqual(keys, ['Z', new Array(JJPtt.SEARCH_ERASE + 1).join('\x7f'), '100\r']);
+});
+
+testAsync('BBS search: done when the list\'s footer is back, not at the echo of the words typed', async function() {
+  var ASK = '【板主:x】  看板《Test》\n 1 a\n搜尋推文數高於多少 (<0則搜噓文數) 的文章: ';
+  var ECHO = ASK + '10';
+  var DONE = '【板主:x】  系列《Test》\n 1 a\n 系列文章  (y)回應';
+  var p = Object.create(JJPtt.prototype), now = ECHO, t0 = Date.now(), synced = 0;
+  p.app = { conn: { isConnected: true } };
+  p.connected = function() { return true; };
+  p.screen = function() { return now; };
+  p.sendSync = function(k) { synced++; return Promise.resolve(); };
+  setTimeout(function() { now = DONE; }, 120);  // PTT searching a moment after the echo
+  await p.searched(ASK);
+  assert.ok(Date.now() - t0 >= 100, 'waited past the echo for the search');
+  assert.strictEqual(synced, 1, 'then a whole redraw: the list after the search');
+  now = ECHO;
+  setTimeout(function() { now = ASK.replace(/搜尋.*$/, '◆ 找不到符合條件的文章。'); }, 30);
+  assert.strictEqual(await p.searched(ASK), 'fail');
+  assert.strictEqual(synced, 1, 'no Ctrl-L on 找不到 (it would close the message as any key)');
+});
+
+testAsync('BBS: keys that may leave the screen as it is (End at the newest) wait for PTT\'s redraw (Ctrl-L), not 2 s', async function() {
+  var p = Object.create(JJPtt.prototype), sent = [], fed = [];
+  p.app = { parser: { feed: function(d) { fed.push(d); } } };
+  p.connected = function() { return true; };
+  // PTT: an answer of its own (no redraw), then Ctrl-L's whole redraw, in two pieces
+  p.send = function(k) {
+    sent.push(k);
+    setTimeout(function() { p.app.parser.feed('\x1b[?2026h\x1b[5;1H>\x1b[?2026l'); }, 10);
+    setTimeout(function() { p.app.parser.feed('\x1b[?2026h\x1b[H\x1b[2J list'); }, 30);
+    setTimeout(function() { p.app.parser.feed(' rows\x1b[?20'); }, 50);
+    setTimeout(function() { p.app.parser.feed('26l'); }, 70);
+  };
+  var t0 = Date.now();
+  await p.sendSync('\x1b[4~', 2000);
+  var took = Date.now() - t0;
+  assert.deepStrictEqual(sent, ['\x1b[4~\x0c']);
+  assert.ok(took >= 60 && took < 1000, 'after the whole redraw, its end split over pieces: ' + took + ' ms');
+  assert.strictEqual(fed.length, 4, 'what PTT sends still goes to the screen');
+});
+
+test('app: each screen\'s load time, once, in the corner (green within a second, orange slower)', function() {
+  assert.strictEqual(JJMobile.loadText(420, '預讀'), '0.42s 預讀');
+  assert.strictEqual(JJMobile.loadText(1234, ''), '1.23s');
+  var m = Object.create(JJMobile.prototype), shown = [];
+  var screen = { openedAt: Date.now() - 1500, loadMs: null };
+  m.stack = [screen];
+  m.showLoadTime = function(s) { shown.push(s.loadMs + ' ' + s.loadHow); };
+  m.loaded(screen, 'BBS');
+  assert.ok(screen.loadMs >= 1500 && screen.loadHow === 'BBS');
+  var first = screen.loadMs;
+  m.loaded(screen, '網頁');
+  assert.strictEqual(screen.loadMs, first, 'the first content counts, not what comes after');
+  assert.strictEqual(shown.length, 1);
+  var below = { openedAt: Date.now(), loadMs: null };
+  m.loaded(below, '網頁');
+  assert.strictEqual(shown.length, 1, 'a screen not on top: kept for when it is back');
+  assert.ok(JJMobile.LOAD_SLOW_MS === 1000);
+});
+
+testAsync('extension, www.ptt.cc down: reading ahead on a hidden connection, nearest first; an unfinished one is not waited for', async function() {
+  var isApp = lib.isApp, isExt = lib.isExtension, DP = global.DOMParser;
+  try {
+    lib.isApp = function() { return false; };
+    lib.isExtension = function() { return true; };
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    var r = new PttReader({ conn: {}, pref: { values: { readerPrefetchCount: 2 }, logins: ['tester', 'pw'] } });
+    var read = [];
+    var release = [];
+    r.bg = { termArticle: function(u) { read.push(u); return new Promise(function(res) { release.push(function() { res({ url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', html: '<x>' }); }); }); } };
+    r.articleFromDoc = function(doc, url) { return { url: url, meta: { '時間': '' }, text: '', pushes: [] }; };
+    r.preloadMedia = function() {};
+    var rows = [10, 11, 12, 13, 14].map(function(n) { return { author: 'a' + n, title: 't' + n, num: n }; });
+    var snap = { board: 'Test', rows: rows, index: 2 };
+    assert.ok(!r.bgPlan(snap, 2, 0), 'web up: as usual');
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/M.1.A.2.html');
+    assert.deepStrictEqual(r.bgOrder(snap, 2, 0), [2, 3, 1, 4, 0]);
+    assert.deepStrictEqual(r.bgOrder(snap, 2, -1), [2, 1, 3, 0, 4], 'reading upwards: up first');
+    assert.ok(r.bgPlan(snap, 2, 0));
+    assert.deepStrictEqual(read, ['jjterm:art/Test/12'], 'one at a time, the article itself first');
+    assert.strictEqual(r.takePrefetch({ board: 'Test', author: 'a12', title: 't12', time: '' }), null, 'not finished: not waited for');
+    release.shift()();
+    await new Promise(function(res) { setTimeout(res, 5); });
+    assert.deepStrictEqual(read, ['jjterm:art/Test/12', 'jjterm:art/Test/13']);
+    var got = await r.takePrefetch({ board: 'Test', author: 'a12', title: 't12', time: '' });
+    assert.strictEqual(got.url, 'https://www.ptt.cc/bbs/Test/M.1.A.2.html');
+    // a new plan drops what was waiting (not the one being read)
+    r.bgPlan({ board: 'Test', rows: rows, index: 0 }, 0, 0);
+    assert.ok(!r.prefetch[PttReader.prefetchKey('Test', 'a14', 't14')], 'dropped');
+    r.app.pref.logins = ['tester', ''];
+    assert.strictEqual(r.bgPtt(), null, 'no saved password: no hidden connection');
+  } finally {
+    lib.isApp = isApp;
+    lib.isExtension = isExt;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+test('extension: picture hosts that need a referrer are in the manifest\'s host permissions', function() {
+  var m = JSON.parse(fs.readFileSync(path.join(root, 'extension/manifest.json'), 'utf8'));
+  PttReader.REFERER_HOSTS.forEach(function(h) {
+    assert.ok(m.host_permissions.indexOf('https://' + h + '/*') >= 0, h);
+  });
+  assert.ok(/1802/.test(PttReader.prototype.ensureOver18.toString()), 'the referrer rule');
+});
+
+testAsync('the app just opened, logging in: a board read on the BBS waits for the login instead of failing', async function() {
+  var isApp = lib.isApp, DP = global.DOMParser;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    lib.isApp = function() { return true; };
+    var calls = [];
+    var ptt = { user: '', boardPage: function(b) { calls.push(b); return Promise.resolve('<list>'); } };
+    ptt.waitLogin = JJPtt.prototype.waitLogin;
+    var finish;
+    ptt.waitLogin(new Promise(function(res) { finish = res; }));
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    r.webDoc = function() { var e = new Error('HTTP 500'); e.webStatus = 500; return Promise.reject(e); };
+    var got = r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    await new Promise(function(res) { setTimeout(res, 5); });
+    assert.deepStrictEqual(calls, [], 'not yet');
+    ptt.user = 'tester';
+    finish();
+    var doc = await got;
+    assert.ok(doc.jjFromTerm);
+    assert.deepStrictEqual(calls, ['Test']);
+    assert.strictEqual(ptt.loggingIn, null, 'over');
+    // the login failed: the usual message
+    ptt.user = '';
+    ptt.waitLogin(Promise.reject(new Error('密碼不對')));
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /登入 PTT 帳號後/);
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+testAsync('www.ptt.cc down for board lists and articles only: its search still answers and is used', async function() {
+  var isApp = lib.isApp, DP = global.DOMParser;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    lib.isApp = function() { return true; };
+    var calls = [], web = [];
+    var ptt = { user: 'tester', boardPage: function(b, before, q) { calls.push([b, q]); return Promise.resolve('<list>'); } };
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    r.webDoc = function(u) {
+      web.push(u);
+      if (/search/.test(u)) return Promise.resolve({ web: true });
+      var e = new Error('HTTP 500'); e.webStatus = 500; return Promise.reject(e);
+    };
+    PttReader.probeAt = Date.now();  // no look at the web site in this test
+    var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm && PttReader.webRecentlyDown('list'));
+    assert.strictEqual(PttReader.webKind('https://www.ptt.cc/bbs/Test/search?q=recommend%3A100'), 'search');
+    assert.ok(!PttReader.webRecentlyDown('search'));
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/search?q=recommend%3A100');
+    assert.ok(doc.web, 'search from the web site');
+    assert.deepStrictEqual(calls, [['Test', undefined]]);
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.strictEqual(web.filter(function(u) { return /index/.test(u); }).length, 1, 'the list straight from the BBS now');
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.probeAt = 0;
+  }
+});
+
+testAsync('www.ptt.cc down a moment ago: straight to the BBS, a look at the web a minute, back once it answers', async function() {
+  var isApp = lib.isApp, DP = global.DOMParser, T = PttReader.WEB_TIMEOUT_MS;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    lib.isApp = function() { return true; };
+    var calls = [], web = [];
+    var ptt = { user: 'tester',
+      boardPage: function(b) { calls.push(['list', b]); return Promise.resolve('<list>'); },
+      termArticle: function() { var e = new Error('PTT 沒有回應'); return Promise.reject(e); } };
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    var answer = 'down';
+    r.webDoc = function(u) {
+      web.push(u);
+      if (answer === 'ok') return Promise.resolve({ web: true });
+      if (answer === 'hang') return new Promise(function() {});
+      var e = new Error('HTTP 503'); e.webStatus = 503; return Promise.reject(e);
+    };
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/index.html');
+    PttReader.markWebDown('https://www.ptt.cc/bbs/Test/M.1.A.2.html');
+    PttReader.probeAt = 0;
+    var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm);
+    assert.strictEqual(web.length, 1, 'only the one look at the web site, in the background');
+    await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.strictEqual(web.length, 1, 'no second look within the minute');
+    // a BBS failure is not tried again on the web site
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html'), /沒有回應/);
+    assert.strictEqual(web.length, 1);
+    // what the BBS can't open still goes to the web site
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/x.html'), /HTTP 503|故障/);
+    assert.strictEqual(web.length, 2);
+    // the web site answers again: the next look ends the BBS stand-in
+    answer = 'ok';
+    PttReader.probeAt = 0;
+    await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    await new Promise(function(res) { setTimeout(res, 5); });
+    assert.ok(!PttReader.webRecentlyDown('list'), 'board lists answer again');
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.web, 'the web site again');
+    // no answer at all counts as down
+    answer = 'hang';
+    PttReader.WEB_TIMEOUT_MS = 20;
+    calls.length = 0;
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm && PttReader.webRecentlyDown());
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.WEB_TIMEOUT_MS = T;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+    PttReader.probeAt = 0;
+  }
+});
+
+testAsync('www.ptt.cc down (HTTP 500) in the app: read on the BBS; 404 and the extension are not', async function() {
+  var isApp = lib.isApp;
+  var DP = global.DOMParser;
+  try {
+    global.DOMParser = function() { this.parseFromString = function(html) { return { html: html }; }; };
+    var calls = [];
+    var ptt = { user: 'tester',
+      boardPage: function(b, before) { calls.push(['list', b, before]); return Promise.resolve('<list>'); },
+      termArticle: function(u, want) { calls.push(want ? ['art', u, want] : ['art', u]); return Promise.resolve({ url: 'https://www.ptt.cc/bbs/Test/M.1.A.2.html', html: '<art>' }); } };
+    var r = new PttReader({ mobile: { ptt: ptt } });
+    var status = 500;
+    r.webDoc = function() { var e = new Error('HTTP ' + status); e.webStatus = status; return Promise.reject(e); };
+    lib.isApp = function() { return true; };
+    var doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html');
+    assert.ok(doc.jjFromTerm);
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 0]);
+    assert.ok(PttReader.webRecentlyDown());
+    doc = await r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html?_=123');
+    assert.deepStrictEqual(calls.pop(), ['art', 'https://www.ptt.cc/bbs/Test/M.1.A.2.html'], 'without the cache query');
+    assert.strictEqual(doc.jjUrl, 'https://www.ptt.cc/bbs/Test/M.1.A.2.html');
+    await r.fetchDoc('jjterm:list/Test/120');
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 120]);
+    await r.fetchDoc('jjterm:art/Test/7');
+    assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7']);
+    ptt.boardPage = function(b, before, q) { calls.push(['list', b, before, q]); return Promise.resolve('<list>'); };
+    await r.fetchDoc('https://www.ptt.cc/bbs/Test/search?q=abc');
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 0, 'abc'], 'searched on the BBS');
+    await r.fetchDoc('jjterm:search/Test/30/author%3Abob');
+    assert.deepStrictEqual(calls.pop(), ['list', 'Test', 30, 'author:bob']);
+    await r.fetchDoc('jjterm:art/Test/7/author%3Abob');
+    assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7/author%3Abob']);
+    // from a list read on the BBS: the number is checked against the row's author and title
+    await r.fetchDoc('jjterm:art/Test/7/recommend%3A100#bob/' + encodeURIComponent('[新聞] 某某'));
+    assert.deepStrictEqual(calls.pop(), ['art', 'jjterm:art/Test/7/recommend%3A100', { author: 'bob', title: '[新聞] 某某' }]);
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/search?page=2&q=abc'), /重新搜尋/);
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/M.1.A.2.html/x'), /網頁版現在故障.*暫時不能用/);
+    ptt.user = '';
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /登入 PTT 帳號後/);
+    ptt.user = 'tester';
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};  // not down a moment ago: the web site first
+    status = 404;
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /HTTP 404/);
+    status = 500;
+    lib.isApp = function() { return false; };
+    await assert.rejects(r.fetchDoc('https://www.ptt.cc/bbs/Test/index.html'), /HTTP 500/, 'the extension stays in the terminal as before');
+    assert.strictEqual(calls.length, 0);
+  } finally {
+    lib.isApp = isApp;
+    global.DOMParser = DP;
+    PttReader.webDownAt = 0; PttReader.webDownBy = {};
+  }
+});
+
+// ---- SSH: BigInteger.modPow with BigInt (js/fast_modpow.js) -------------------
+
+(function() {
+  // the SSH library as the page loads it, then fast_modpow.js on top
+  var ctx = { navigator: { userAgent: '', appName: 'Netscape', platform: '' }, document: {}, console: { log: function() {}, debug: function() {} } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(root, 'js/paramikojs_ssh.min.js'), 'utf8'), ctx);
+  var BI = ctx.BigInteger;
+  var jsbn = BI.prototype.modPow;
+  vm.runInContext(fs.readFileSync(path.join(root, 'js/fast_modpow.js'), 'utf8'), ctx, { filename: 'js/fast_modpow.js' });
+  var crypto = require('crypto');
+  function rnd(bytes) { return new BI(crypto.randomBytes(bytes).toString('hex'), 16); }
+  function big(s) { return new BI(s, 10); }
+
+  test('ssh: modPow is the BigInt one, with the same results as jsbn', function() {
+    assert.notStrictEqual(BI.prototype.modPow, jsbn);
+    assert.strictEqual(BI.prototype.modPow.jsbn, jsbn);
+    var cases = [
+      [big('2'), rnd(512), rnd(512).setBit(4095).setBit(0)],      // the DH group exchange: 4096-bit p
+      [rnd(512), big('65537'), rnd(256).setBit(2047).setBit(0)],  // an RSA host key check
+      [rnd(64), rnd(64), rnd(64).clearBit(0).setBit(511)],        // an even modulus
+      [rnd(80), big('0'), rnd(32)], [big('0'), rnd(8), rnd(8)],
+      [rnd(8), rnd(8), big('1')], [rnd(16), big('1'), rnd(8)],
+      [big('-12345'), big('7'), big('1000003')]                   // negative: left to jsbn
+    ];
+    for (var i = 0; i < 20; ++i) cases.push([rnd(1 + i * 3), rnd(1 + i * 5), rnd(1 + i * 4).setBit(i)]);
+    cases.forEach(function(c, i) {
+      var want = jsbn.call(c[0], c[1], c[2]).toString(16);
+      var got = c[0].modPow(c[1], c[2]);
+      assert.ok(got instanceof BI, 'case ' + i + ': a BigInteger back');
+      assert.strictEqual(got.toString(16), want, 'case ' + i);
+    });
+  });
+
+  test('ssh: modPow of a 4096-bit group exchange is fast', function() {
+    var p = rnd(512).setBit(4095).setBit(0), x = rnd(512);
+    var t = Date.now();
+    big('2').modPow(x, p);
+    assert.ok(Date.now() - t < 400, (Date.now() - t) + ' ms');
+  });
+
+  test('ssh: fast_modpow installs once, and not without BigInt', function() {
+    assert.strictEqual(ctx.FastModPow.install(BI), true);
+    assert.strictEqual(BI.prototype.modPow.jsbn, jsbn, 'not wrapped twice');
+    var Fake = function() {};
+    Fake.prototype.modPow = function() { return 'old'; };
+    var B = ctx.BigInt;
+    ctx.BigInt = undefined;
+    try {
+      assert.strictEqual(vm.runInContext('FastModPow.install', ctx).call(ctx.FastModPow, Fake), false);
+    } finally { ctx.BigInt = B; }
+    assert.strictEqual(new Fake().modPow(), 'old');
+  });
+})();
+
+// ---- 使用聲明 shown once on first use (js/notice.js) ---------------------------------
+
+(function() {
+  var store = {};
+  var ctx = vm.createContext({
+    window: { localStorage: { getItem: function(k) { return k in store ? store[k] : null; }, setItem: function(k, v) { store[k] = String(v); } } },
+    lib: { isApp: function() { return false; }, isExtension: function() { return true; } }
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'js/notice.js'), 'utf8'), ctx, { filename: 'js/notice.js' });
+  var N = vm.runInContext('JJPTT_NOTICE', ctx);
+  test('notice: says that more connections may be used to be faster, and that passwords stay here', function() {
+    var all = N.points.map(function(p) { return p.join(' '); }).join('\n');
+    assert.ok(/多開連線/.test(all) && /重複登入/.test(all), all);
+    assert.ok(/密碼/.test(all) && /不會上傳/.test(all), all);
+  });
+  test('notice: the web version gets the relay point, the extension and app do not', function() {
+    assert.strictEqual(N.list().length, N.points.length);
+    ctx.lib.isExtension = function() { return false; };
+    assert.strictEqual(N.list().length, N.points.length + 1);
+    assert.ok(/轉接/.test(N.list().pop()[1]));
+    ctx.lib.isApp = function() { return true; };
+    assert.strictEqual(N.list().length, N.points.length);
+  });
+  test('notice: shown until 我知道了, then not again until its version goes up', function() {
+    assert.strictEqual(N.seen(), false);
+    N.markSeen();
+    assert.strictEqual(N.seen(), true);
+    N.version++;
+    assert.strictEqual(N.seen(), false);
+    N.version--;
+  });
+  test('notice: in the build (Gruntfile concat and jshint), dev.html and 設定 → 關於', function() {
+    var grunt = fs.readFileSync(path.join(root, 'Gruntfile.js'), 'utf8');
+    assert.strictEqual(grunt.split("'js/notice.js'").length - 1, 2);
+    assert.ok(/js\/notice\.js/.test(fs.readFileSync(path.join(root, 'dev.html'), 'utf8')));
+    assert.ok(/id="about_notice"/.test(fs.readFileSync(path.join(root, 'index.html'), 'utf8')));
+    assert.ok(/使用聲明/.test(fs.readFileSync(path.join(root, 'js/mobile_settings.js'), 'utf8')));
+  });
+})();
 
 (async function() {
   for (var i = 0; i < asyncTests.length; ++i) {

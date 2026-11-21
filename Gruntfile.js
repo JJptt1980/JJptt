@@ -35,6 +35,7 @@ module.exports = function(grunt) {
         src: [
           'js/changelog.js',
           'js/pitch.js',
+          'js/notice.js',
           'js/pttchrome.js', 
           'js/touch_controller.js',
           'js/drive_sync.js',
@@ -58,6 +59,7 @@ module.exports = function(grunt) {
           'js/emoticon.js',
           'js/symbols.js',
           'js/input_helper.js',
+          'js/fast_modpow.js',
           'js/ssh.js', 
           'js/telnet.js', 
           'js/b2u_table.js',
@@ -78,6 +80,7 @@ module.exports = function(grunt) {
     jshint: {
       files: [
           'js/changelog.js',
+          'js/notice.js',
           'js/pttchrome.js', 
           'js/touch_controller.js',
           'js/drive_sync.js',
@@ -98,6 +101,7 @@ module.exports = function(grunt) {
           'js/emoticon.js',
           'js/symbols.js',
           'js/input_helper.js',
+          'js/fast_modpow.js',
           'js/ssh.js', 
           'js/telnet.js', 
           'js/b2u_table.js',

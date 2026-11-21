@@ -2122,8 +2122,13 @@ pttchrome.App.prototype.updatePicPreviewPosition = function() {
     return;
   var mouseHeight = this.curY;
   var curX = this.curX;
+  var pic = this.view.picPreview;
+  // beside the mouse, on the side with room, never past the window edge
+  var place = pttchrome.App.picPreviewSide(curX, pic.naturalWidth, $(window).width());
+  pic.style.maxWidth = place.maxWidth + 'px';
+  var left = place.right ? curX + 20 : Math.max(4, curX - 20 - pic.clientWidth);
   var pageHeight = $(window).height();
-  var imageHeight = this.view.picPreview.clientHeight;
+  var imageHeight = pic.clientHeight;
   var imgTop = 20;
 
   // opening image would pass the bottom of the page
@@ -2137,7 +2142,19 @@ pttchrome.App.prototype.updatePicPreviewPosition = function() {
   var fontSize = this.view.chh;
   this.view.picPreview.style.cssText += [
     'font-size:'+fontSize+'px',
-    'left:'+(curX+20)+'px',
+    'left:'+left+'px',
     'top:'+imgTop+'px'
     ].join(';');
+};
+
+// Which side of the mouse the hover preview goes on, and how wide it may be
+// there: right of the mouse when the picture fits or that side has more room,
+// else left. It is never as wide as to cover the mouse (that would end the
+// hover) or to run past the window edge.
+pttchrome.App.picPreviewSide = function(curX, naturalWidth, winWidth) {
+  var gap = 20, edge = 4;
+  var roomRight = Math.max(0, winWidth - curX - gap - edge);
+  var roomLeft = Math.max(0, curX - gap - edge);
+  var right = naturalWidth <= roomRight || roomRight >= roomLeft;
+  return { right: right, maxWidth: right ? roomRight : roomLeft };
 };

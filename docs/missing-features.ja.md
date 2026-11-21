@@ -46,4 +46,4 @@
 
 ## ほしい機能があれば
 
-アプリで先にほしい機能は、[GitHub の Issues](https://github.com/killnopig/JJptt/issues) で教えてください。
+アプリで先にほしい機能は、[GitHub の Issues](https://github.com/JJptt1980/JJptt/issues) で教えてください。

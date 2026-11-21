@@ -33,12 +33,24 @@ import java.net.URL;
 @CapacitorPlugin(name = "ApkUpdater")
 public class ApkUpdaterPlugin extends Plugin {
 
-    private static final String ALLOWED_PREFIX = "https://github.com/killnopig/JJptt/releases/download/";
+    // The GitHub account was renamed from killnopig to JJptt1980. The API now
+    // returns JJptt1980 download URLs; the old prefix still redirects there.
+    private static final String[] ALLOWED_PREFIXES = {
+        "https://github.com/JJptt1980/JJptt/releases/download/",
+        "https://github.com/killnopig/JJptt/releases/download/",
+    };
+
+    private static boolean isJJpttRelease(String url) {
+        for (String p : ALLOWED_PREFIXES) {
+            if (url.startsWith(p)) return true;
+        }
+        return false;
+    }
 
     @PluginMethod
     public void install(PluginCall call) {
         final String url = call.getString("url", "");
-        if (!url.startsWith(ALLOWED_PREFIX)) {
+        if (!isJJpttRelease(url)) {
             call.reject("not JJptt's release");
             return;
         }
@@ -86,7 +98,7 @@ public class ApkUpdaterPlugin extends Plugin {
     @PluginMethod
     public void fetchText(PluginCall call) {
         final String url = call.getString("url", "");
-        if (!url.startsWith(ALLOWED_PREFIX)) {
+        if (!isJJpttRelease(url)) {
             call.reject("not JJptt's release");
             return;
         }

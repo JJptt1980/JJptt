@@ -124,6 +124,9 @@ locale.en_US = {
   "update_needHost": {
     "message": "One-click update needs the new native host: run the installer in jjptt/native-host once more (Mac: sh install.sh)."
   },
+  "update_notChanged": {
+    "message": "Ran git pull in the jjptt folder, but it is still v%s. git said:"
+  },
   "update_failedRun": {
     "message": "Automatic update failed."
   },
@@ -573,6 +576,9 @@ locale.en_US = {
   "cmenu_openReader": {
     "message": "Open in reader view"
   },
+  "reader_termPage": {
+    "message": "PTT's web site is down: reading on the BBS, page %1 of %2"
+  },
   "reader_needFirstPage": {
     "message": "Go back to the article's first page (with author and title) first"
   },
@@ -988,6 +994,9 @@ locale.en_US = {
   },
   "about_kofiPost": {
     "message": " (optional; every feature works either way)"
+  },
+  "about_notice_title": {
+    "message": "Notice"
   },
   "about_traffic_title": {
     "message": "Data usage"

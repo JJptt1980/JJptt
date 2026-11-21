@@ -10,16 +10,79 @@ JJMobile.prototype.renderArticle = function(screen) {
   this.readUrls = this.readUrls || {};
   this.readUrls[screen.url] = true;
   var wait = this.loading(v);
-  this.getArticle(screen.url).then(function(article) {
+  var shown = false;
+  // read on the BBS (www.ptt.cc down): the first page at once, the rest
+  // as it comes, the place kept
+  var draw = function(article, note) {
+    var top = v.scrollTop;
+    v.innerHTML = '';
+    self.fillArticle(screen, article);
+    if (note) v.appendChild(JJMobile.el('div', 'jjm-hint jjm-term-note', note));
+    v.scrollTop = top;
+  };
+  var last = 0;
+  var partial = function(article, i, n) {
+    if (!v.isConnected || (shown && Date.now() - last < 1500)) return;
+    last = Date.now();
+    shown = true;
+    draw(article, 'PTT 網頁版現在故障，從 BBS 連線讀取中… ' + i + '／' + n + ' 頁');
+    self.loaded(screen, ahead ? '預讀' : 'BBS');  // (ahead: set below, before any page comes)
+  };
+  var key = screen.url;
+  // read ahead already (done, or coming in): 預讀 in the corner
+  var c0 = this.articles[key];
+  var ahead = !!(c0 && (c0.done || c0.last));
+  this.getArticle(key, partial).then(function(article) {
     if (!v.isConnected) return;
     wait.remove();
-    self.fillArticle(screen, article);
-    if (screen.list) self.prefetchList(screen.list, screen.index + 1);
+    self.loaded(screen, ahead ? '預讀' : article.fromTerm || JJPtt.isTermUrl(key) ? 'BBS' : '網頁');
+    // opened from a list read on the BBS: its www.ptt.cc address (Q) is
+    // what pushing and replying need
+    if (JJPtt.isTermUrl(screen.url) && article.url && !JJPtt.isTermUrl(article.url)) screen.url = article.url;
+    if (shown) draw(article);
+    else self.fillArticle(screen, article);
+    if (!self.freshen(screen, article, key) && screen.list) self.prefetchList(screen.list, screen.index + 1);
   }).catch(function(err) {
     wait.remove();
+    self.loaded(screen, '失敗');
     self.failed(v, err, function() { self.reload(screen); });
   });
   this.swipeArticles(screen);
+};
+
+// An article read ahead a while ago (pushes keep coming): read again and
+// drawn again, the place kept, once it has more pushes. True when it does
+// (reading ahead goes on after it).
+JJMobile.STALE_MS = 20000;
+JJMobile.prototype.freshen = function(screen, article, key) {
+  var self = this;
+  var c = this.articles[key];
+  if (!c || Date.now() - c.at < JJMobile.STALE_MS) return false;
+  delete this.articles[key];
+  var url = article.fromTerm || JJPtt.isTermUrl(key) ? key : key + (key.indexOf('?') < 0 ? '?' : '&') + '_=' + Date.now();
+  var p = this.getArticle(url);
+  if (url !== key) this.articles[key] = this.articles[url];
+  p.then(function(fresh) {
+    if (!fresh.url || JJPtt.isTermUrl(fresh.url)) fresh.url = article.url;
+    var v = screen.view;
+    if (!v.isConnected || screen.article !== article) return;
+    if ((fresh.pushes || []).length <= (article.pushes || []).length) return;
+    var top = v.scrollTop;
+    v.innerHTML = '';
+    self.fillArticle(screen, fresh);
+    v.scrollTop = top;
+  }, function() {}).then(function() {
+    if (screen.list && screen.view.isConnected) self.prefetchList(screen.list, screen.index + 1);
+  });
+  return true;
+};
+
+// 推文 N, then how many 推 / 噓 / →: the list's number is 推 minus 噓
+// (→ not counted), so it rarely equals N.
+JJMobile.pushTally = function(pushes) {
+  var n = { '推': 0, '噓': 0, '→': 0 };
+  pushes.forEach(function(p) { if (p.tag in n) n[p.tag]++; });
+  return '推文 ' + pushes.length + (pushes.length ? '　推 ' + n['推'] + '・噓 ' + n['噓'] + '・→ ' + n['→'] : '');
 };
 
 JJMobile.prototype.fillArticle = function(screen, article) {
@@ -70,8 +133,7 @@ JJMobile.prototype.fillArticle = function(screen, article) {
           v.appendChild(body);
           v.appendChild(rep);
         }
-        var count = (article.pushes || []).length;
-        var title = el('div', 'jjm-section', '推文 ' + count);
+        var title = el('div', 'jjm-section', JJMobile.pushTally(article.pushes || []));
         if (!rep) v.appendChild(body);
         v.appendChild(title);
         pushList = el('div', 'jjm-pushes');
@@ -217,6 +279,8 @@ JJMobile.prototype.composer = function(screen) {
   // a quiet button like the rest (not a blue link, the only one in the app)
   var reply = JJMobile.iconButton('jjm-btn jjm-btn-quiet', 'edit', '回文到看板…', function() { self.replySheet(screen); });
   box.appendChild(reply);
+  var fail = el('div', 'jjm-form-error');
+  box.appendChild(fail);
 
   var max = function() { return JJPtt.pushMaxBytes(self.ptt.user || 'abcdefghijkl'); };
   var update = function() {
@@ -237,11 +301,14 @@ JJMobile.prototype.composer = function(screen) {
     var go = function() {
       send.disabled = true;
       send.textContent = '送出中…';
+      fail.textContent = '';
       self.ptt.push(screen.url, kind, text).then(function() {
         input.value = '';
         self.reloadAfterPost(screen, { id: self.ptt.user, text: text, kind: kind });
       }).catch(function(err) {
         if (self.app.showToast) self.app.showToast(err.message, 4000);
+        // stays under the box, with the PTT screen a tap away
+        self.failureNote(fail, err.message);
       }).then(function() {
         send.disabled = false;
         send.textContent = '送出';
@@ -283,7 +350,7 @@ JJMobile.prototype.replySheet = function(screen) {
       }).catch(function(e2) {
         go.disabled = false;
         go.textContent = '發表回文';
-        err.textContent = e2.message;
+        self.failureNote(err, e2.message);
       });
     });
     self.showSheet('回文：' + ((screen.article && screen.article.meta['標題']) || ''), form);
@@ -395,7 +462,7 @@ JJMobile.prototype.postSheet = function(screen) {
       }).catch(function(e2) {
         go.disabled = false;
         go.textContent = '發表文章';
-        err.textContent = e2.message + '（內容已存成草稿）';
+        self.failureNote(err, e2.message + '（內容已存成草稿）');
       });
     });
     self.showSheet('發文到 ' + board, form);
@@ -600,6 +667,7 @@ JJMobile.prototype.pushInfo = function(article, fact) {
     if (p.ip) (idsByIp[p.ip] = idsByIp[p.ip] || {})[id] = true;
   });
   var out = [];
+  var urlJoins = PttReader.urlJoins(article);
   article.pushes.forEach(function(p, i) {
     var id = p.id.toLowerCase();
     var black = isBlack(id);
@@ -656,12 +724,12 @@ JJMobile.prototype.pushInfo = function(article, fact) {
     head.appendChild(el('span', 'jjm-push-time', [flag, p.time].filter(Boolean).join(' ')));
     if (insightsOn) head.appendChild(el('span', 'jjm-push-floor', (i + 1) + '樓'));
     row.appendChild(head);
-    var content = reader.lineNode([{ text: p.content, st: { fg: 7, bg: 0, hl: false, href: '' } }]);
+    var content = reader.lineNode(PttReader.pushSegs(p.content, urlJoins[i], { fg: 7, bg: 0, hl: false, href: '' }));
     content.node.className = 'jjm-push-text';
     row.appendChild(content.node);
     if (!black && !(id in notes)) {  // no thumbnails for blacklisted or custom-list users
       content.urls.forEach(function(u) {
-        if (PttReader.imageSrc(u)) row.appendChild(reader.linkBlock(u, true));
+        if (PttReader.pushMedia(u, urlJoins[i])) row.appendChild(reader.linkBlock(u, true, true));
       });
     }
     out[i] = row;

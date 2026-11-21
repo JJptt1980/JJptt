@@ -98,6 +98,7 @@ JJMobile.prototype.accountSheet = function(then) {
 
 JJMobile.prototype.reload = function(screen) {
   if (screen.type === 'article') delete this.articles[screen.url];
+  screen.fresh = true;  // not from the list cache (JJMobile.listDoc)
   screen.view.innerHTML = '';
   screen.view.scrollTop = 0;
   this.render(screen);
@@ -154,7 +155,7 @@ JJMobile.prototype.syncFavs = function(manual) {
     return;
   }
   if (manual && this.app.showToast) this.app.showToast('正在讀取 PTT 我的最愛…', 1500);
-  this.ptt.favorites().then(function(boards) {
+  this.ptt.favorites({ bg: !manual }).then(function(boards) {
     var mine = self.favs();
     var have = {};
     var merged = boards.map(function(b) {
@@ -184,6 +185,12 @@ JJMobile.prototype.syncFavs = function(manual) {
       if (self.stack.length === 1) self.setBar(home);
     }
   }).catch(function(err) {
+    // gave way to a board or article opened meanwhile: again a little later
+    if (err && err.yielded && !manual) {
+      self.favsTries = (self.favsTries || 0) + 1;
+      if (self.favsTries < 20) setTimeout(function() { self.syncFavs(false); }, 5000);
+      return;
+    }
     if (manual && self.app.showToast) self.app.showToast('同步失敗：' + err.message, 3500);
   });
 };
@@ -240,6 +247,21 @@ JJMobile.homeTabs = function(favs) {
   return tabs;
 };
 
+// 熱門看板 last read (renderHome): [[name, title, users]...]
+JJMobile.HOT_KEY = 'jjHotBoards';
+JJMobile.parseHot = function(doc) {
+  var out = [];
+  var rows = doc.querySelectorAll('.b-ent a.board');
+  for (var i = 0; i < rows.length; ++i) {
+    var a = rows[i];
+    var name = ((a.querySelector('.board-name') || {}).textContent || '').trim();
+    var title = ((a.querySelector('.board-title') || {}).textContent || '').replace(/^◎/, '').trim();
+    var users = ((a.querySelector('.board-nuser') || {}).textContent || '').trim();
+    if (name) out.push([name, title, users]);
+  }
+  return out;
+};
+
 JJMobile.prototype.renderHome = function(screen) {
   var self = this;
   var el = JJMobile.el;
@@ -276,21 +298,34 @@ JJMobile.prototype.renderHome = function(screen) {
       list.appendChild(el('div', 'jjm-hint', '在看板裡按右上角的 ☆ 加到這裡，登入後也會自動拿 PTT 的我的最愛。'));
     }
     cur.boards.forEach(function(f) { list.appendChild(self.boardRow(f.name, JJPtt.cleanTitle(f.title), '')); });
+    this.loaded(screen, '');
   } else {
-    var wait = this.loading(list);
+    // the last list at once (kept over a restart), www.ptt.cc's in its
+    // place when it comes: its first answer after the app opens takes ~1 s
+    var shown = JJMobile.store(JJMobile.HOT_KEY);
+    var draw = function(rows) {
+      list.innerHTML = '';
+      rows.forEach(function(r) { list.appendChild(self.boardRow(r[0], r[1], r[2])); });
+    };
+    var wait = null;
+    if (shown && shown.length) {
+      draw(shown);
+      this.loaded(screen, '上次');
+    } else {
+      wait = this.loading(list);
+    }
     this.app.reader.fetchDoc(JJMobile.WEB + '/bbs/hotboards.html').then(function(doc) {
-      wait.remove();
-      var rows = doc.querySelectorAll('.b-ent a.board');
-      for (var i = 0; i < rows.length; ++i) {
-        var a = rows[i];
-        var name = (a.querySelector('.board-name') || {}).textContent || '';
-        var title = ((a.querySelector('.board-title') || {}).textContent || '').replace(/^◎/, '');
-        var users = ((a.querySelector('.board-nuser') || {}).textContent || '').trim();
-        if (name) list.appendChild(self.boardRow(name.trim(), title.trim(), users));
+      if (wait) wait.remove();
+      var rows = JJMobile.parseHot(doc);
+      if (rows.length) {
+        draw(rows);
+        if (!doc.jjFromTerm) JJMobile.store(JJMobile.HOT_KEY, rows);
       }
+      self.loaded(screen, doc.jjFromTerm ? 'BBS' : '網頁');
     }).catch(function(err) {
-      wait.remove();
-      self.failed(list, err, function() { self.reload(screen); });
+      if (wait) wait.remove();
+      self.loaded(screen, '失敗');
+      if (!shown || !shown.length) self.failed(list, err, function() { self.reload(screen); });
     });
   }
   this.refreshVersion();

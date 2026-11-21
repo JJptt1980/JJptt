@@ -3,6 +3,12 @@
 
 // ---- board: article list ------------------------------------------------------------
 
+// A link on a board page: www.ptt.cc's are site paths, the ones made from
+// the BBS screen (PTT's web site down, JJPtt.indexHtml) are jjterm: addresses.
+JJMobile.webUrl = function(href) {
+  return /^(?:https?|jjterm):/.test(href) ? href : JJMobile.WEB + href;
+};
+
 // "https://www.ptt.cc/bbs/Gossiping/index.html" etc. -> entries, newest first.
 JJMobile.parseIndex = function(doc, newestFirst) {
   var out = [];
@@ -15,7 +21,7 @@ JJMobile.parseIndex = function(doc, newestFirst) {
     var a = n.querySelector('.title a');
     out.push({
       title: ((a || n.querySelector('.title')) || {}).textContent.trim(),
-      url: a ? JJMobile.WEB + a.getAttribute('href') : '',
+      url: a ? JJMobile.webUrl(a.getAttribute('href')) : '',
       author: ((n.querySelector('.meta .author') || {}).textContent || '').trim(),
       date: ((n.querySelector('.meta .date') || {}).textContent || '').trim(),
       nrec: ((n.querySelector('.nrec') || {}).textContent || '').trim(),
@@ -25,7 +31,7 @@ JJMobile.parseIndex = function(doc, newestFirst) {
   var older = '';
   var links = doc.querySelectorAll('.btn-group-paging a');
   for (var k = 0; k < links.length; ++k) {
-    if (/上頁/.test(links[k].textContent) && links[k].getAttribute('href')) older = JJMobile.WEB + links[k].getAttribute('href');
+    if (/上頁/.test(links[k].textContent) && links[k].getAttribute('href')) older = JJMobile.webUrl(links[k].getAttribute('href'));
   }
   var board = ((doc.querySelector('#topbar .board') || {}).textContent || '').replace(/^\s*看板\s*/, '').trim();
   var normal = out.filter(function(e) { return !e.pinned; });
@@ -58,7 +64,11 @@ JJMobile.prototype.renderBoard = function(screen) {
     screen.loadingMore = true;
     more.textContent = '載入中…';
     var first = !screen.entries.length;
-    self.app.reader.fetchDoc(screen.older).then(function(doc) {
+    var fresh = first && screen.fresh;
+    screen.fresh = false;
+    var c0 = !fresh && self.listDocs && self.listDocs[screen.older];
+    var ahead = !!(c0 && Date.now() - c0.at < JJMobile.LIST_CACHE_MS);
+    self.listDoc(screen.older, fresh).then(function(doc) {
       // board index pages run oldest -> newest; search results come newest first
       var page = JJMobile.parseIndex(doc, !screen.query);
       if (page.board && first && !screen.query) {
@@ -67,20 +77,26 @@ JJMobile.prototype.renderBoard = function(screen) {
         if (self.stack[self.stack.length - 1] === screen) self.setBar(screen);
       }
       screen.older = page.older;
+      if (first && doc.jjFromTerm) {
+        v.insertBefore(el('div', 'jjm-hint jjm-term-note', 'PTT 網頁版現在故障，改用 BBS 連線讀取'), screen.listNode);
+      }
       // 置底公告, unless hidden (設定 → 一般; the extension's hidePinned)
       var pv2 = (self.app.pref && self.app.pref.values) || {};
       if (first && page.pinned.length && !pv2.hidePinned) {
         page.pinned.forEach(function(e) { self.appendEntry(screen, e); });
       }
       page.entries.forEach(function(e) { self.appendEntry(screen, e); });
+      if (first) self.loaded(screen, doc.jjFromTerm ? 'BBS' : ahead ? '預讀' : '網頁');
       more.textContent = screen.older ? '' : (screen.entries.length ? '沒有更早的文章了' : '沒有文章');
       screen.loadingMore = false;
       if (first) self.prefetchList(screen, 0);
+      if (first && !screen.query && !doc.jjFromTerm) self.prefetchSearches(screen.board);
       // a short first page: keep going until the screen is full
       if (screen.older && v.scrollHeight <= v.clientHeight + 200) loadMore();
     }).catch(function(err) {
       screen.loadingMore = false;
       more.textContent = '';
+      if (first) self.loaded(screen, '失敗');
       self.failed(more, err, function() { more.innerHTML = ''; loadMore(); });
     });
   };
@@ -89,6 +105,50 @@ JJMobile.prototype.renderBoard = function(screen) {
     if (v.scrollTop + v.clientHeight > v.scrollHeight - 600) loadMore();
   });
   loadMore();
+};
+
+// List pages (a board's, a search's, 熱門看板) asked for in the last
+// minute: the same one again -- back and into the board again, a search
+// read ahead (prefetchSearches) -- comes at once. fresh: read again
+// (reload).
+JJMobile.LIST_CACHE_MS = 60 * 1000;
+JJMobile.prototype.listDoc = function(url, fresh) {
+  var self = this;
+  var cache = this.listDocs = this.listDocs || {};
+  var c = cache[url];
+  if (c && !fresh && Date.now() - c.at < JJMobile.LIST_CACHE_MS) return c.promise;
+  var entry = { at: Date.now() };
+  entry.promise = this.app.reader.fetchDoc(url);
+  cache[url] = entry;
+  entry.promise.then(function(doc) {
+    entry.at = Date.now();
+    if (doc && doc.jjFromTerm) entry.at = 0;  // read on the BBS: once only
+  }, function() {
+    if (cache[url] === entry) delete cache[url];
+  });
+  var keys = Object.keys(cache);
+  if (keys.length > 40) delete cache[keys[0]];
+  return entry.promise;
+};
+
+// The one-tap 推文數 searches of a board (爆文 / 止爆 / 噓爆...), asked
+// for while its list is read: www.ptt.cc takes seconds over a search the
+// first time (2-4 s for 噓爆), then answers it at once. One at a time,
+// web site only (on the BBS each would take the connection for seconds).
+JJMobile.prototype.prefetchSearches = function(board) {
+  var self = this;
+  if (PttReader.webRecentlyDown('search')) return;
+  var todo = JJMobile.QUICK_PUSH.map(function(qk) {
+    return JJMobile.WEB + '/bbs/' + encodeURIComponent(board) + '/search?q=' + encodeURIComponent('recommend:' + qk[0]);
+  });
+  var next = function() {
+    var url = todo.shift();
+    if (!url || PttReader.webRecentlyDown('search')) return;
+    var c = self.listDocs && self.listDocs[url];
+    var p = c && Date.now() - c.at < JJMobile.LIST_CACHE_MS ? c.promise : self.listDoc(url);
+    p.then(next, function() {});
+  };
+  next();
 };
 
 JJMobile.prototype.hiddenEntry = function(e) {
@@ -179,12 +239,15 @@ JJMobile.prototype.markRead = function(screen) {
   screen.entries.forEach(function(e) { if (e.row && read[e.url]) e.row.classList.add('jjm-read'); });
 };
 
-JJMobile.QUICK_PUSH = [[20, '推 ≥ 20'], [100, '爆文'], [-100, '噓爆']];
+// [推文數, label, what the button shows instead of the label (PTT's own
+// marks: 爆 in a red dot, a grey XX; 止爆 -- 推 ≥ 200 -- a purple 爆)]
+JJMobile.QUICK_PUSH = [[20, '推 ≥ 20'], [100, '爆文', '爆', 'jjm-quick-hot'], [200, '止爆', '爆', 'jjm-quick-hot jjm-quick-stop'],
+  [-100, '噓爆', 'XX', 'jjm-quick-boo']];
 
 // 推文數 search in the title: 爆文 / 噓爆 / 推 ≥ N / 噓 ≥ N
 JJMobile.pushQueryLabel = function(n) {
   n = parseInt(n, 10);
-  if (n >= 100) return n === 100 ? '爆文' : '推 ≥ ' + n;
+  if (n >= 100) return n === 100 ? '爆文' : n === 200 ? '止爆' : '推 ≥ ' + n;
   if (n <= -100) return n === -100 ? '噓爆' : '噓 ≥ ' + (-n);
   return n < 0 ? '噓 ≥ ' + (-n) : '推 ≥ ' + n;
 };
@@ -227,10 +290,15 @@ JJMobile.prototype.searchSheet = function(screen) {
   // one tap: the usual 推文數 searches (爆 = 100 推, 噓爆 = 噓比推多 100)
   var quick = el('div', 'jjm-chips jjm-quick');
   JJMobile.QUICK_PUSH.forEach(function(qk) {
-    quick.appendChild(JJMobile.button('jjm-chip', qk[1], function() {
+    var b = JJMobile.button('jjm-chip', qk[2] ? '' : qk[1], function() {
       self.closeSheet();
       self.open({ type: 'board', board: screen.board, query: 'recommend:' + qk[0] });
-    }));
+    });
+    if (qk[2]) {
+      b.appendChild(el('span', qk[3], qk[2]));
+      b.setAttribute('aria-label', qk[1]);
+    }
+    quick.appendChild(b);
   });
   box.appendChild(quick);
   box.appendChild(el('button', 'jjm-btn jjm-btn-main', '搜尋'));
@@ -247,13 +315,39 @@ JJMobile.prototype.searchSheet = function(screen) {
 
 // ---- loading articles (with the cache that makes the next one instant) -----------
 
-JJMobile.prototype.getArticle = function(url) {
+// onPartial(article so far, page, pages): while www.ptt.cc is down and the
+// article is read on the BBS page by page -- also when a read ahead of it
+// is already under way. bg: reading ahead (gives way to the others).
+JJMobile.prototype.getArticle = function(url, onPartial, bg) {
   var c = this.articles[url];
-  if (c && Date.now() - c.at < JJMobile.CACHE_MS) return c.promise;
   var self = this;
-  var p = this.app.reader.fetchArticle(url);
-  this.articles[url] = { promise: p, at: Date.now() };
-  p.catch(function() { delete self.articles[url]; });
+  // opened while its read ahead is still waiting its turn on the BBS
+  // (behind others, a long article): read now instead -- what is being
+  // read ahead gives way at its next page. One already coming in page by
+  // page is ridden on.
+  if (c && onPartial && c.bg && !c.done && !c.last) c = null;
+  if (c && Date.now() - c.at < JJMobile.CACHE_MS) {
+    if (!onPartial) return c.promise;
+    c.listener = onPartial;
+    if (c.last) onPartial.apply(null, c.last);
+    // a read ahead that gave way to something else: read it now
+    return c.promise.catch(function(err) {
+      if (!(err && err.yielded)) throw err;
+      return self.getArticle(url, onPartial);
+    });
+  }
+  var entry = { at: Date.now(), listener: onPartial || null, last: null, bg: !!bg, done: false };
+  var p = this.app.reader.fetchArticle(url, {
+    bg: !!bg,
+    onPartial: function(a, i, n) {
+      entry.last = [a, i, n];
+      if (entry.listener) entry.listener(a, i, n);
+    }
+  });
+  entry.promise = p;
+  p.then(function() { entry.at = Date.now(); entry.done = true; }, function() {});  // how old its pushes are
+  this.articles[url] = entry;
+  p.catch(function() { if (self.articles[url] === entry) delete self.articles[url]; });
   var keys = Object.keys(this.articles);
   if (keys.length > 80) delete this.articles[keys[0]];
   return p;
@@ -267,17 +361,34 @@ JJMobile.prototype.aheadCount = function() {
 };
 
 // Loads the next few articles of a list, two at a time; their pictures too
-// when 預先讀取時連圖片一起下載 is on.
+// when 預先讀取時連圖片一起下載 is on. 置底 are skipped: a board's list
+// starts with them, and reading them first kept the newest articles
+// waiting (on the BBS, one at a time, several seconds each).
 JJMobile.prototype.prefetchList = function(screen, from) {
   var self = this;
-  var todo = screen.entries.slice(from, from + this.aheadCount() * 2).filter(function(e) { return e.url; });
+  // www.ptt.cc down: each is read on the BBS, one at a time, and gives way
+  // as soon as the user opens something else. Still logging
+  // in (the app just opened): queued now, read once it is in (termDoc waits)
+  // A list read on the BBS (jjterm: links) is read there too, though the
+  // web site's articles were never marked down (they were not even tried):
+  // nothing was read ahead from such a list
+  var down = PttReader.webRecentlyDown('article') ||
+    screen.entries.some(function(e) { return JJPtt.isTermUrl(e.url); });
+  var ptt = this.app.reader && this.app.reader.termSource();
+  if (down && !(ptt && (ptt.user || ptt.loggingIn))) return;
+  var n = down ? this.aheadCount() : this.aheadCount() * 2;
+  var todo = screen.entries.slice(from).filter(function(e) {
+    return e.url && !e.pinned;
+  }).slice(0, n);
+  var token = this.prefetchToken = {};
   var next = function() {
+    if (self.prefetchToken !== token) return;  // another list or article since
     var e = todo.shift();
     if (!e) return;
-    self.getArticle(e.url).then(function(a) {
+    self.getArticle(e.url, null, true).then(function(a) {
       self.app.reader.preloadMedia(a);
     }, function() {}).then(next);
   };
   next();
-  next();
+  if (!down) next();
 };

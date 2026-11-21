@@ -435,6 +435,79 @@ TermBuf.prototype = {
         //
       }
     }
+    this.joinSplitUrls();
+  },
+
+  // A URL cut by PTT at the end of a full push goes on in the same user's
+  // next push (SplitUrl): both parts link to the whole URL.
+  joinSplitUrls: function() {
+    if (typeof SplitUrl === 'undefined') return;
+    var rows = this.rows, cols = this.cols, lines = this.lines, col;
+    var pushRe = /^[推→噓] (\w+)\s*:\s?(.*?)\s*(?:(?:\d{1,3}\.){3}\d{1,3}\s+)?\d{2}\/\d{2}(?: \d{2}:\d{2})?\s*$/;
+    var list = [];
+    for (var row = 0; row < rows; ++row) {
+      var m = pushRe.exec(this.getRowText(row, 0, cols));
+      list.push(m ? { id: m[1], content: m[2] } : { id: '', content: '' });
+    }
+    var joins = SplitUrl.joins(list);
+    for (row = 0; row < rows; ++row) {
+      var line = lines[row], join = joins[row];
+      // where the URL starts: the link on the push's first part
+      var first = null;
+      if (join && join.first && line.uris && line.uris.length) {
+        var u = line.uris[line.uris.length - 1];
+        if (line[u[0]].startOfURL) first = u[0];
+      }
+      if (line.splitFirst && (line.splitFirst.col !== first || !line[first].startOfURL)) {
+        var old = line[line.splitFirst.col];
+        if (old.startOfURL && old.fullurl === line.splitFirst.url) old.fullurl = line.splitFirst.own;
+        old.needUpdate = true;
+        this.lineChangeds[row] = true;
+        line.splitFirst = null;
+      }
+      if (first !== null && line[first].fullurl !== join.url) {
+        line.splitFirst = { col: first, own: line[first].fullurl, url: join.url };
+        line[first].fullurl = join.url;
+        line[first].needUpdate = true;
+        this.lineChangeds[row] = true;
+      }
+      // the rest of the URL at the start of the next push
+      var range = null;
+      if (join && join.tail) {
+        var cs = '';
+        for (col = 0; col < cols; ++col) cs += line[col].ch.charCodeAt(0) < 0x80 ? line[col].ch : 'x';
+        var colon = cs.indexOf(':');
+        var start = colon < 0 ? -1 : cs.indexOf(join.tail, colon);
+        if (start >= 0) range = [start, start + join.tail.length];
+      }
+      var had = line.splitTail;
+      if (had && !(range && had.range[0] === range[0] && had.range[1] === range[1] && had.url === join.url &&
+                   line.uris && line.uris.indexOf(had.range) >= 0)) {
+        if (line.uris && line.uris.indexOf(had.range) >= 0) {
+          line.uris.splice(line.uris.indexOf(had.range), 1);
+          if (!line.uris.length) line.uris = null;
+          for (col = had.range[0]; col < had.range[1]; ++col) {
+            line[col].partOfURL = line[col].startOfURL = line[col].endOfURL = false;
+            line[col].fullurl = '';
+            line[col].needUpdate = true;
+          }
+          this.lineChangeds[row] = true;
+        }
+        line.splitTail = had = null;
+      }
+      if (range && !had) {
+        for (col = range[0]; col < range[1]; ++col) {
+          line[col].partOfURL = true;
+          line[col].needUpdate = true;
+        }
+        line[range[0]].startOfURL = true;
+        line[range[0]].fullurl = join.url;
+        line[range[1] - 1].endOfURL = true;
+        line.uris = (line.uris || []).concat([range]);
+        line.splitTail = { range: range, url: join.url };
+        this.lineChangeds[row] = true;
+      }
+    }
   },
 
   clear: function(param) {

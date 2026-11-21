@@ -32,7 +32,7 @@ Mail, editing or deleting your own articles, the archive (精華區), chat and v
 
 ## Download and update
 
-1. On your phone, open the [JJptt Android release page](https://github.com/killnopig/JJptt/releases/tag/android-stable) and tap `JJptt.apk` (about 10 MB). An APK is the install file for an Android app.
+1. On your phone, open the [JJptt Android release page](https://github.com/JJptt1980/JJptt/releases/tag/android-stable) and tap `JJptt.apk` (about 10 MB). An APK is the install file for an Android app.
 2. Open the downloaded file to install.
    - The first time, Android asks whether to allow installing apps from unknown sources. Choose allow.
    - Why it asks: JJptt isn't on Google Play, and Android always asks once when you install an app from anywhere else.
@@ -49,6 +49,6 @@ Android 7.0 and later. Not on Google Play — install from the release page abov
 
 Many people have asked for an iPhone version, and I'd love to make one. Most of the code can be reused, but publishing an iOS app requires joining Apple's Developer Program (US$99 a year), and an iPhone to test the direct PTT connection and pushing.
 
-JJptt has always been a free, ad-free side project, and that cost isn't covered yet. If JJptt is useful to you and you'd like to help make the iOS version happen, you're welcome to [buy me a coffee on Ko-fi](https://ko-fi.com/killnopig) — any amount, entirely optional, and no feature depends on it. Once the developer account is covered, I'll start, and share the progress here.
+JJptt has always been a free, ad-free side project, and that cost isn't covered yet. If JJptt is useful to you and you'd like to help make the iOS version happen, you're welcome to [buy me a coffee on Ko-fi](https://ko-fi.com/jjptt1980) — any amount, entirely optional, and no feature depends on it. Once the developer account is covered, I'll start, and share the progress here.
 
 <sub>The articles, accounts and IPs in the promo images are fictional demo data.</sub>

@@ -31,7 +31,7 @@
 **手順2：JJptt をダウンロード**
 
 ```bash
-cd ~ && git clone https://github.com/killnopig/JJptt.git
+cd ~ && git clone https://github.com/JJptt1980/JJptt.git
 ```
 
 - 「コマンドライン・デベロッパツールが必要です」と出たら「インストール」を押し、終わってからもう一度上のコマンドを貼り付けます。
@@ -70,7 +70,7 @@ sh ~/JJptt/native-host/install.sh
 `Windows キー` を押して `cmd` と入力し、「コマンド プロンプト」を開いて、次の行を貼り付けて Enter：
 
 ```bat
-cd %USERPROFILE% && git clone https://github.com/killnopig/JJptt.git
+cd %USERPROFILE% && git clone https://github.com/JJptt1980/JJptt.git
 ```
 
 完了すると `C:\Users\<あなたの名前>\JJptt` フォルダができます。
@@ -83,7 +83,7 @@ cd %USERPROFILE% && git clone https://github.com/killnopig/JJptt.git
 
 ### 方法2：zip ファイルをダウンロード
 
-1. [Releases](https://github.com/killnopig/JJptt/releases/latest) から2つのファイルをダウンロードします：`JJptt-extension-<バージョン>.zip` と `JJptt-native-host-<バージョン>.zip`。
+1. [Releases](https://github.com/JJptt1980/JJptt/releases/latest) から2つのファイルをダウンロードします：`JJptt-extension-<バージョン>.zip` と `JJptt-native-host-<バージョン>.zip`。
 2. 両方を解凍します（Mac はダブルクリック、Windows は右クリック →「すべて展開」）。
 3. ローカルヘルパーをインストールします：
    - Mac：「ターミナル」を開き（方法1の手順1）、`sh `（sh のあとに半角スペース）と入力して、解凍した `native-host` フォルダの中の `install.sh` をウィンドウにドラッグし、Enter を押します。

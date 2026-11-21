@@ -185,9 +185,32 @@ JJMobile.prototype.setup = function() {
 };
 
 JJMobile.prototype.start = function() {
+  PttReader.loadWebDown();  // www.ptt.cc down before the app was closed
   this.open({ type: 'home' });
   this.autoLogin();
   this.checkUpdate(false);
+  this.noticeSheet(false);
+};
+
+// 使用聲明 (js/notice.js): once on first use, from below; again only when its version goes up.
+// Closing it by tapping outside leaves it to show next time; 我知道了 marks it seen.
+JJMobile.prototype.noticeSheet = function(always) {
+  if (typeof JJPTT_NOTICE === 'undefined' || (!always && JJPTT_NOTICE.seen())) return;
+  var self = this;
+  var el = JJMobile.el;
+  var box = el('div', 'jjm-sheet-list jjm-notice');
+  JJPTT_NOTICE.list().forEach(function(pt) {
+    var row = el('div', 'jjm-notice-pt');
+    row.appendChild(el('div', 'jjm-notice-h', pt[0]));
+    row.appendChild(el('div', 'jjm-hint', pt[1]));
+    box.appendChild(row);
+  });
+  box.appendChild(el('div', 'jjm-hint', '這些說明之後也可以在 設定 → 關於 看到。'));
+  box.appendChild(JJMobile.button('jjm-btn jjm-btn-main jjm-wide', JJPTT_NOTICE.ok, function() {
+    JJPTT_NOTICE.markSeen();
+    self.closeSheet();
+  }));
+  this.showSheet(JJPTT_NOTICE.title, box);
 };
 
 // ---- updating from inside the app ----------------------------------------------------
@@ -207,8 +230,8 @@ JJMobile.prototype.start = function() {
 JJMobile.TAG_STABLE = 'android-stable';
 JJMobile.TAG_TEST = 'android-latest';
 JJMobile.BETA_KEY = 'jjptt.m.betaChannel';
-JJMobile.RELEASE_API_BASE = 'https://api.github.com/repos/killnopig/JJptt/releases/tags/';
-JJMobile.RELEASE_DL_BASE = 'https://github.com/killnopig/JJptt/releases/download/';
+JJMobile.RELEASE_API_BASE = 'https://api.github.com/repos/JJptt1980/JJptt/releases/tags/';
+JJMobile.RELEASE_DL_BASE = 'https://github.com/JJptt1980/JJptt/releases/download/';
 JJMobile.RELEASE_API = JJMobile.RELEASE_API_BASE + JJMobile.TAG_TEST;
 
 JJMobile.RELEASE_DL = JJMobile.RELEASE_DL_BASE + JJMobile.TAG_TEST + '/';
@@ -411,6 +434,10 @@ JJMobile.prototype.installUpdate = function() {
 JJMobile.prototype.autoLogin = function() {
   var self = this;
   var tries = 0;
+  // until the settings say whether there is a saved account, pages wait
+  // as for a login (JJPtt.waitLogin)
+  var found;
+  this.ptt.waitLogin(new Promise(function(resolve) { found = resolve; }));
   var check = function() {
     var pref = self.app.pref;
     var saved = pref && pref.logins;
@@ -418,8 +445,11 @@ JJMobile.prototype.autoLogin = function() {
       self.ptt.login(saved[0], saved[1]).catch(function(err) {
         if (self.app.showToast) self.app.showToast('自動登入失敗：' + err.message, 4000);
       });
+      found();
     } else if (++tries < 15) {
       setTimeout(check, 200);
+    } else {
+      found();
     }
   };
   check();
@@ -539,11 +569,41 @@ JJMobile.prototype.back = function() {
 };
 
 JJMobile.prototype.render = function(screen) {
+  // how long until its content shows (the corner, JJMobile.loaded)
+  screen.openedAt = Date.now();
+  screen.loadMs = null;
   this.setBar(screen);
   if (screen.type === 'home') this.renderHome(screen);
   else if (screen.type === 'board') this.renderBoard(screen);
   else if (screen.type === 'article') this.renderArticle(screen);
-  else if (screen.type === 'settings') this.renderSettings(screen);
+  else if (screen.type === 'settings') { this.renderSettings(screen); this.loaded(screen, ''); }
+};
+
+// A screen's content is on show: how long it took since it was opened (or
+// reloaded), in a corner of the screen with where it came from (網頁 /
+// BBS / 預讀) -- green within a second, orange slower. Once per showing.
+JJMobile.LOAD_SLOW_MS = 1000;
+JJMobile.prototype.loaded = function(screen, how) {
+  if (!screen || screen.loadMs !== null || !screen.openedAt) return;
+  screen.loadMs = Date.now() - screen.openedAt;
+  screen.loadHow = how || '';
+  if (this.stack[this.stack.length - 1] === screen) this.showLoadTime(screen);
+};
+JJMobile.loadText = function(ms, how) {
+  return (ms / 1000).toFixed(2) + 's' + (how ? ' ' + how : '');
+};
+JJMobile.prototype.showLoadTime = function(screen) {
+  if (!this.root) return;
+  if (!this.loadEl) {
+    this.loadEl = JJMobile.el('div', 'jjm-load-time');
+    this.loadEl.setAttribute('aria-hidden', 'true');
+    this.root.appendChild(this.loadEl);
+  }
+  var ms = screen && screen.loadMs;
+  var known = typeof ms === 'number';
+  this.loadEl.textContent = known ? JJMobile.loadText(ms, screen.loadHow) : '';
+  this.loadEl.style.display = known ? '' : 'none';
+  this.loadEl.classList.toggle('jjm-slow', known && ms > JJMobile.LOAD_SLOW_MS);
 };
 
 // Text onto the clipboard: the clipboard API, else a hidden text box and
@@ -591,6 +651,7 @@ JJMobile.prototype.setBar = function(screen) {
   // board / article: the title floats over the buttons, see-through, and taps go to the buttons under it
   this.bar.classList.toggle('jjm-float', screen.type === 'board' || screen.type === 'article');
   this.titleEl.textContent = screen.title || 'JJptt';
+  this.showLoadTime(screen);
   if (screen.type === 'home') this.refreshVersion();  // the version, not the name
   this.actions.innerHTML = '';
   // `what`: an icon's name (JJMobile.ICONS), or words with `words` (the

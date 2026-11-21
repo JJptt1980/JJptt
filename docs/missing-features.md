@@ -46,4 +46,4 @@
 
 ## 想要哪個功能？
 
-想要 App 先做哪一個，可以到 [GitHub 的 Issues](https://github.com/killnopig/JJptt/issues) 留言告訴我們。
+想要 App 先做哪一個，可以到 [GitHub 的 Issues](https://github.com/JJptt1980/JJptt/issues) 留言告訴我們。

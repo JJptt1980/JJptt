@@ -753,7 +753,9 @@ TermView.prototype = {
         break;
       case 40: //Arrow Down
         if (this.listReversed()) { if (!this.listAtBottom()) conn.send('\x1b[A'); }
-        else conn.send('\x1b[B');
+        // hidden 置底: ↓ on the last article stays there instead of going
+        // onto a pinned post nobody sees and being pulled back with ↑
+        else if (!this.listAtLastBeforePinned()) conn.send('\x1b[B');
         break;
       case 45: //Insert
         conn.send('\x1b[2~');
@@ -1251,6 +1253,9 @@ TermView.prototype = {
       out[first + s] = '<span type="bbsrow" srow="-1"> </span>';
     }
     this.listMap = { slotOf: slotOf, rowOf: rowOf, html: out, hidden: {}, reversed: false };
+    // PTT's cursor on the last article with the hidden pinned posts right
+    // after it on this page: ↓ must not go further (listAtLastBeforePinned)
+    st.lastBeforePinned = !!(pinnedCount && selNum && selNum === maxNum && pinnedAt < 0 && !prompt);
 
     if (!this.conn || prompt) return;  // never type into a question on the bottom row
     var conn = this.conn;
@@ -1564,6 +1569,12 @@ TermView.prototype = {
   listAtBottom: function() {
     var map = this.listMap;
     return !!(map && map.reversed && map.selNum === 1);
+  },
+  // Oldest-first list with the pinned posts hidden: the selection is on the
+  // newest article and the pinned posts follow it on this page.
+  listAtLastBeforePinned: function() {
+    var st = this.pinFillState;
+    return !!(this.listMap && !this.listMap.reversed && this.buf.pageState == 2 && st && st.lastBeforePinned);
   },
 
   listReversed: function() {

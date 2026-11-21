@@ -31,7 +31,7 @@ Press `⌘ + Space`, type "Terminal", press Enter. A window you can type in appe
 **Step 2: download JJptt**
 
 ```bash
-cd ~ && git clone https://github.com/killnopig/JJptt.git
+cd ~ && git clone https://github.com/JJptt1980/JJptt.git
 ```
 
 - If asked to install the command line developer tools, click "Install", wait for it to finish, and paste the command again.
@@ -70,7 +70,7 @@ Download from <https://git-scm.com/download/win> and click "Next" through the de
 Press the `Windows key`, type `cmd`, open Command Prompt, paste this line and press Enter:
 
 ```bat
-cd %USERPROFILE% && git clone https://github.com/killnopig/JJptt.git
+cd %USERPROFILE% && git clone https://github.com/JJptt1980/JJptt.git
 ```
 
 When done, there is a new folder `C:\Users\<your name>\JJptt`.
@@ -83,7 +83,7 @@ Open that `JJptt` folder → `native-host` → double-click `install.bat`.
 
 ### Method 2: download zip files
 
-1. From [Releases](https://github.com/killnopig/JJptt/releases/latest), download two files: `JJptt-extension-<version>.zip` and `JJptt-native-host-<version>.zip`.
+1. From [Releases](https://github.com/JJptt1980/JJptt/releases/latest), download two files: `JJptt-extension-<version>.zip` and `JJptt-native-host-<version>.zip`.
 2. Unzip both (on a Mac, double-click; on Windows, right-click → "Extract All").
 3. Install the local helper:
    - Mac: open Terminal (see Method 1, step 1), type `sh ` (sh and a space), drag `install.sh` from the unzipped `native-host` folder into the window, and press Enter.
