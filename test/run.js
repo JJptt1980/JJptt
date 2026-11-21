@@ -1099,6 +1099,23 @@ testAsync('push: to the board, the article by AID, X, 推, text, confirm', async
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
   assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'X', '1', '說得好\r', 'y\r']);
 });
+testAsync('push: what PTT\'s input already holds is erased before the text', async function() {
+  var s = boardScript({ 'X': 11 });
+  s.push(['您覺得這篇文章 1.值得推薦 2.給它噓聲 3.只加→註解 [1]', { '1': 12 }]);    // 11
+  s.push(['推 tester: 26851', { '說得好\r': 13 }]);                                 // 12
+  s.push(['確定[y/N]:', { 'y\r': 8 }]);                                             // 13
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
+  sameJson(f.typed.slice(-3), ['\b\b\b\b\b', '說得好\r', 'y\r']);
+  assert.ok(/26851/.test(f.ptt.lastFailure.message));
+});
+test('push input: what is left after 「推 ID:」', function() {
+  assert.strictEqual(JJPtt.pushInputLeft('看板\n推 Mikeeeee: 2685', 'mikeeeee'), '2685');
+  assert.strictEqual(JJPtt.pushInputLeft('推 tester:   ', 'tester'), '');
+  assert.strictEqual(JJPtt.pushInputLeft('推 other: hi', 'tester'), '');
+});
 testAsync('push: a board that does not allow it says so', async function() {
   var s = boardScript({ 'X': 11 });
   s.push(['本板禁止推薦', {}]);

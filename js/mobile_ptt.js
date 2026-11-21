@@ -550,6 +550,13 @@ JJPtt.prototype.push = function(url, kind, text) {
       return k;
     }).then(function(k) {
       if (k === 'no') throw new Error('這篇文章不能用這種方式推文');
+      // PTT's input already holding something (pushes came out as 「26851JJptt」):
+      // erased first, and the screen kept (設定 → 帳號 → 最後一次 PTT 畫面)
+      var left = JJPtt.pushInputLeft(self.screen(), self.user);
+      if (left) {
+        self.lastFailure = { at: Date.now(), message: '推文欄原本有「' + left + '」，已清掉再打', screen: self.screen() };
+        self.send(new Array(JJPtt.big5Length(left) + 1).join('\b'));
+      }
       self.type(text + '\r');
       return self.wait({ confirm: /確定\s*\[y\/N\]|確定要/i, done: /文章選讀|看板《/ }, 8000, undefined, '送出推文');
     }).then(function(k) {
@@ -557,6 +564,18 @@ JJPtt.prototype.push = function(url, kind, text) {
       return JJPtt.sleep(600);
     });
   });
+};
+
+// What PTT's push input line (「推 ID: …」, the last one for this ID) already
+// holds, or ''.
+JJPtt.pushInputLeft = function(screen, user) {
+  var id = String(user || '').toLowerCase();
+  var lines = String(screen || '').split('\n'), left = '';
+  lines.forEach(function(line) {
+    var m = /^\s*(?:推|噓|→)\s*(\w+)\s*[:：](.*)$/.exec(line);
+    if (m && (!id || m[1].toLowerCase() === id)) left = m[2].trim();
+  });
+  return left;
 };
 
 // ---- reply (回文到看板) -------------------------------------------------------------------------
