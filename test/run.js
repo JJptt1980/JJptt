@@ -2167,6 +2167,27 @@ test('hidden 置底: ↓ on the last article stays there (no jump onto a hidden 
   assert.ok(/listAtLastBeforePinned\(\)/.test(down), '↓ does not check for the last article');
 });
 
+test('app: the hidden terminal sends no keys of its own for a newest-first list (pushes got 26851 in front)', function() {
+  var log = console.log; console.log = function() {};
+  var isApp = global.lib.isApp;
+  try {
+    // a short first page in a newest-first list: the terminal asks PTT for the page before
+    var short = function() {
+      var sent = [];
+      var v = listView(listScreen(range(780715, 780724), 0, 780724), sent);
+      v.bbscore.pref.values.listNewestFirst = true;
+      v.updateListMap();
+      return sent;
+    };
+    global.lib.isApp = function() { return false; };
+    assert.ok(short().length > 0, 'the extension pages back (else this test checks nothing)');
+    global.lib.isApp = function() { return true; };
+    assert.deepStrictEqual(short(), [], 'no keys in the app');
+  } finally {
+    global.lib.isApp = isApp;
+    console.log = log;
+  }
+});
 test('a page without pinned posts is shown as PTT draws it', function() {
   var v = listView(listScreen(range(780688, 780707), 0, 780700), []);
   v.updateListMap();
