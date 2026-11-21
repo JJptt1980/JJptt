@@ -533,31 +533,28 @@ JJPtt.prototype.push = function(url, kind, text) {
     return self.ensureIn().then(function() {
       return self.toArticle(url);
     }).then(function() {
+      // only PTT's answer, newly on the screen (not a line already there)
+      var before = self.screen();
       self.send('X');
       return self.wait({
         choose: /值得推薦|給它噓聲|只加.*註解|1\.\s*值得/,
         input: /(推|噓|→)\s*\w+\s*[:：]/,
         no: /禁止推薦|不能推薦|無法推文|禁止推文|您不能|已被鎖定|權限不足/,
         wait: /推文間隔|請稍候|太快/
-      }, 8000, undefined, '按 X 推文');
+      }, 8000, before, '按 X 推文');
     }).then(function(k) {
       if (k === 'no') throw new Error('這個板或這篇文章不能推文');
       if (k === 'wait') throw new Error('推文太快了，等一下再試');
       if (k === 'choose') {
+        var before = self.screen();
         self.send(kind === '2' ? '2' : kind === '3' ? '3' : '1');
-        return self.wait({ input: /(推|噓|→)\s*\w+\s*[:：]/, no: /禁止|不能|無法/ }, 6000, undefined, '選推噓後等輸入框');
+        return self.wait({ input: /(推|噓|→)\s*\w+\s*[:：]/, no: /禁止|不能|無法/ }, 6000, before, '選推噓後等輸入框');
       }
       return k;
     }).then(function(k) {
       if (k === 'no') throw new Error('這篇文章不能用這種方式推文');
-      // PTT's input already holding something (pushes came out as 「26851JJptt」):
-      // erased first, and the screen kept (設定 → 帳號 → 最後一次 PTT 畫面)
-      var left = JJPtt.pushInputLeft(self.screen(), self.user);
-      if (left) {
-        self.lastFailure = { at: Date.now(), message: '推文欄原本有「' + left + '」，已清掉再打', screen: self.screen() };
-        self.send(new Array(JJPtt.big5Length(left) + 1).join('\b'));
-      }
-      self.type(text + '\r');
+      return self.typePush(text);
+    }).then(function() {
       return self.wait({ confirm: /確定\s*\[y\/N\]|確定要/i, done: /文章選讀|看板《/ }, 8000, undefined, '送出推文');
     }).then(function(k) {
       if (k === 'confirm') self.send('y\r');
@@ -566,11 +563,60 @@ JJPtt.prototype.push = function(url, kind, text) {
   });
 };
 
-// What PTT's push input line (「推 ID: …」, the last one for this ID) already
-// holds, or ''.
+// Types the push into PTT's input and checks the input holds exactly that
+// before Enter: pushes came out as 「26851JJptt」 (digits ending in the 推
+// key 1). Anything else in it is erased and typed again; still wrong: the
+// push is cancelled (Enter on an empty input) and nothing is sent. The
+// screen is kept for 設定 → 帳號 → 最後一次 PTT 畫面.
+JJPtt.prototype.typePush = function(text) {
+  var self = this;
+  var same = function(a, b) { return String(a).replace(/\s+/g, '') === String(b).replace(/\s+/g, ''); };
+  var erase = function(s) { return new Array(JJPtt.big5Length(s) + 3).join('\b'); };
+  var note = function(message) {
+    self.lastFailure = { at: Date.now(), message: message, screen: self.screen() };
+  };
+  var tries = 0;
+  var go = function() {
+    var left = JJPtt.pushInputLeft(self.screen(), self.user);
+    if (left) {
+      note('推文欄原本有「' + left + '」，已清掉再打');
+      self.send(erase(left));
+    }
+    var before = self.screen();
+    self.type(text);
+    var until = Date.now() + 5000;
+    var echoed = function() {  // PTT shows what was typed: in pieces, maybe slowly
+      return self.settle(before, 1500).then(function() {
+        var got = JJPtt.pushInputLeft(self.screen(), self.user);
+        if (got === '' && Date.now() < until) return echoed();
+        return got;
+      });
+    };
+    return echoed().then(function(got) {
+      if (got === '') throw new Error('PTT 的推文欄沒有出現打的字，這次沒有送出');
+      if (got === null || same(got, text)) {  // null: no input line to read, as before
+        self.send('\r');
+        return;
+      }
+      note('推文欄變成「' + got + '」，和打的「' + text + '」不同');
+      self.send(erase(got));
+      if (++tries >= 2) {
+        return JJPtt.sleep(300).then(function() {
+          self.send('\r');  // an empty push is cancelled
+          throw new Error('PTT 的推文欄多了「' + got.replace(text, '') + '」，這次沒有送出（設定 → 帳號 → 最後一次 PTT 畫面）');
+        });
+      }
+      return JJPtt.sleep(300).then(go);
+    });
+  };
+  return go();
+};
+
+// What PTT's push input line (「推 ID: …」, the last one for this ID) holds;
+// null when there is no such line.
 JJPtt.pushInputLeft = function(screen, user) {
   var id = String(user || '').toLowerCase();
-  var lines = String(screen || '').split('\n'), left = '';
+  var lines = String(screen || '').split('\n'), left = null;
   lines.forEach(function(line) {
     var m = /^\s*(?:推|噓|→)\s*(\w+)\s*[:：](.*)$/.exec(line);
     if (m && (!id || m[1].toLowerCase() === id)) left = m[2].trim();

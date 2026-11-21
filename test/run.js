@@ -1091,30 +1091,61 @@ function boardScript(after) {
 testAsync('push: to the board, the article by AID, X, 推, text, confirm', async function() {
   var s = boardScript({ 'X': 11 });
   s.push(['您覺得這篇文章 1.值得推薦 2.給它噓聲 3.只加→註解 [1]', { '1': 12 }]);    // 11
-  s.push(['推 tester:', { '說得好\r': 13 }]);                                       // 12
+  s.push(['推 tester:', { '說得好': 14 }]);                                         // 12
   s.push(['確定[y/N]:', { 'y\r': 8 }]);                                             // 13
+  s.push(['推 tester: 說得好', { '\r': 13 }]);                                       // 14
   var f = fakePtt(s);
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
-  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'X', '1', '說得好\r', 'y\r']);
+  assert.deepStrictEqual(f.typed, ['f', 's', 'Test\r', ' ', '#', AID + '\r', 'X', '1', '說得好', '\r', 'y\r']);
 });
+// the backspaces typePush sends to erase s
+function BS(s) { return new Array(JJPtt.big5Length(s) + 3).join('\b'); }
 testAsync('push: what PTT\'s input already holds is erased before the text', async function() {
   var s = boardScript({ 'X': 11 });
   s.push(['您覺得這篇文章 1.值得推薦 2.給它噓聲 3.只加→註解 [1]', { '1': 12 }]);    // 11
-  s.push(['推 tester: 26851', { '說得好\r': 13 }]);                                 // 12
+  s.push(['推 tester: 26851', { '\b\b\b\b\b\b\b': 14 }]);                         // 12
   s.push(['確定[y/N]:', { 'y\r': 8 }]);                                             // 13
+  s.push(['推 tester:', { '說得好': 15 }]);                                          // 14
+  s.push(['推 tester: 說得好', { '\r': 13 }]);                                       // 15
   var f = fakePtt(s);
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
-  sameJson(f.typed.slice(-3), ['\b\b\b\b\b', '說得好\r', 'y\r']);
+  sameJson(f.typed.slice(-4), ['\b\b\b\b\b\b\b', '說得好', '\r', 'y\r']);
   assert.ok(/26851/.test(f.ptt.lastFailure.message));
+});
+testAsync('push: the input holding more than was typed is erased and typed again', async function() {
+  var s = boardScript({ 'X': 11 });
+  s.push(['您覺得這篇文章 1.值得推薦 2.給它噓聲 3.只加→註解 [1]', { '1': 12 }]);    // 11
+  s.push(['推 tester:', { '說得好': 14 }]);                                          // 12
+  s.push(['確定[y/N]:', { 'y\r': 8 }]);                                             // 13
+  s.push(['推 tester: 1說得好', { [BS('1說得好')]: 15 }]);                  // 14: one more 1
+  s.push(['推 tester:', { '說得好': 16 }]);                                          // 15
+  s.push(['推 tester: 說得好', { '\r': 13 }]);                                       // 16
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好');
+  sameJson(f.typed.slice(-5), ['說得好', BS('1說得好'), '說得好', '\r', 'y\r']);
+});
+testAsync('push: still more than was typed -> cancelled, nothing sent', async function() {
+  var s = boardScript({ 'X': 11 });
+  s.push(['您覺得這篇文章 1.值得推薦 2.給它噓聲 3.只加→註解 [1]', { '1': 12 }]);    // 11
+  s.push(['推 tester:', { '說得好': 13 }]);                                          // 12
+  s.push(['推 tester: 1說得好', { [BS('1說得好')]: 12, '\r': 99 }]);       // 13: always the 1
+  var f = fakePtt(s);
+  await f.ptt.login('tester', 'right');
+  f.typed.length = 0;
+  await assert.rejects(f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '說得好'), /多了「1」，這次沒有送出/);
+  assert.strictEqual(f.typed[f.typed.length - 1], '\r');
+  assert.strictEqual(f.typed.filter(function(k) { return k === '\r'; }).length, 1);
 });
 test('push input: what is left after 「推 ID:」', function() {
   assert.strictEqual(JJPtt.pushInputLeft('看板\n推 Mikeeeee: 2685', 'mikeeeee'), '2685');
   assert.strictEqual(JJPtt.pushInputLeft('推 tester:   ', 'tester'), '');
-  assert.strictEqual(JJPtt.pushInputLeft('推 other: hi', 'tester'), '');
+  assert.strictEqual(JJPtt.pushInputLeft('推 other: hi', 'tester'), null);
 });
 testAsync('push: a board that does not allow it says so', async function() {
   var s = boardScript({ 'X': 11 });
@@ -1231,14 +1262,15 @@ testAsync('push: s in 我的最愛 only moves the cursor onto the board -> → g
   s[6] = ['請輸入看板名稱(按空白鍵自動搜尋):', { 'Test\r': 'cur' }];
   s.cur = ['【看板列表】   批踢踢實業坊\n   編號   看 板   類別   轉信  中   文   敘   述\n     1   MyFavFolder 目錄 □MLB\n>    2 ˇTest       測試 ◎測試', { '\x1b[C': 7 }];
   s.push(['您覺得這篇文章 1.值得推薦 2.給它噓聲 3.只加→註解 [1]', { '1': 12 }]);    // 11
-  s.push(['推 tester:', { '讚\r': 13 }]);                                          // 12
+  s.push(['推 tester:', { '讚': 14 }]);                                            // 12
   s.push(['確定[y/N]:', { 'y\r': 8 }]);                                             // 13
+  s.push(['推 tester: 讚', { '\r': 13 }]);                                          // 14
   var f = fakePtt(s);
   await f.ptt.login('tester', 'right');
   f.typed.length = 0;
   await f.ptt.push('https://www.ptt.cc/bbs/Test/M.1451110159.A.379.html', '1', '讚');
   assert.ok(f.typed.indexOf('\x1b[C') >= 0, JSON.stringify(f.typed));
-  assert.ok(f.typed.indexOf('讚\r') >= 0, JSON.stringify(f.typed));
+  assert.ok(f.typed.indexOf('讚') >= 0, JSON.stringify(f.typed));
 });
 
 testAsync('board prompt: waits for 請輸入看板名稱, not the list header\'s 「選擇看板」', async function() {
