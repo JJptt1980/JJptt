@@ -655,6 +655,35 @@ test('app search: 推文數 labels (爆文, 噓爆) and the quick buttons', func
   assert.strictEqual(JJMobile.pushQueryLabel('200'), '止爆');
   assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, 200, -100]);
 });
+test('app 發表文章: the list is loaded again until www.ptt.cc has the new article (it looked lost)', function() {
+  var mine = { author: 'mikeeeee', title: 'JJptt25' };
+  assert.ok(JJMobile.isMyArticle({ author: 'MikeEEEE', title: '[測試] JJptt25' }, mine));
+  assert.ok(!JJMobile.isMyArticle({ author: 'someone', title: '[測試] JJptt25' }, mine));
+  assert.ok(!JJMobile.isMyArticle({ author: 'mikeeeee', title: '[測試] 測測測試' }, mine));
+  var realSetTimeout = global.setTimeout, timers = [];
+  global.setTimeout = function(fn) { timers.push(fn); return timers.length; };
+  try {
+    var screen = { entries: [] }, loads = 0;
+    var m = { stack: [screen], reload: function(s) {
+      loads++;
+      // www.ptt.cc has it from the third load on
+      s.entries = loads >= 3 ? [{ author: 'mikeeeee', title: '[測試] JJptt25' }] : [{ author: 'x', title: 'old' }];
+    } };
+    JJMobile.prototype.reloadAfterArticle.call(m, screen, mine);
+    for (var i = 0; i < 50 && timers.length; ++i) timers.shift()();
+    assert.strictEqual(loads, 3, 'loaded until the article is there, then stopped');
+    // never there: a few tries, then left alone
+    var s2 = { entries: [] }, n2 = 0;
+    var m2 = { stack: [s2], reload: function() { n2++; } };
+    timers = [];
+    JJMobile.prototype.reloadAfterArticle.call(m2, s2, mine);
+    for (var j = 0; j < 100 && timers.length; ++j) timers.shift()();
+    assert.strictEqual(n2, JJMobile.POST_TRIES + 1);
+    assert.ok(/reloadAfterArticle\(/.test(JJMobile.prototype.composeArticle ? JJMobile.prototype.composeArticle.toString() : fs.readFileSync(path.join(root, 'js/mobile_article.js'), 'utf8')), 'not used after 發表文章');
+  } finally {
+    global.setTimeout = realSetTimeout;
+  }
+});
 test('version: JJptt\'s version and the run; before that 0.0.N', function() {
   assert.strictEqual(JJMobile.version(57, '1.33.0'), '1.33.0 (57)');
   assert.strictEqual(JJMobile.version(57), '0.0.57');
