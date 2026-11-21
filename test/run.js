@@ -655,37 +655,42 @@ test('app search: 推文數 labels (爆文, 噓爆) and the quick buttons', func
   assert.strictEqual(JJMobile.pushQueryLabel('200'), '止爆');
   assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, 200, -100]);
 });
-test('app 發表文章: the list is loaded again until www.ptt.cc has the new article (it looked lost)', function() {
+test('app 發表文章: the board page is read again right away until www.ptt.cc has the new article, then the list drawn once (it looked lost)', function() {
   var mine = { author: 'mikeeeee', title: 'JJptt25' };
   assert.ok(JJMobile.isMyArticle({ author: 'MikeEEEE', title: '[測試] JJptt25' }, mine));
   assert.ok(!JJMobile.isMyArticle({ author: 'someone', title: '[測試] JJptt25' }, mine));
   assert.ok(!JJMobile.isMyArticle({ author: 'mikeeeee', title: '[測試] 測測測試' }, mine));
-  var realSetTimeout = global.setTimeout, timers = [], delays = [];
-  global.setTimeout = function(fn, ms) { timers.push(fn); delays.push(ms); return timers.length; };
-  var realNow = Date.now, clock = 1000;
+  var parse = JJMobile.parseIndex, realNow = Date.now, clock = 1000;
   Date.now = function() { return clock; };
+  // a promise that runs its callback at once (no microtask queue to drain)
+  var now = function(v) { return { then: function(ok) { return ok(v); } }; };
   try {
-    var screen = { entries: [] }, loads = 0;
-    var m = { stack: [screen], reload: function(s) {
-      loads++;
-      // www.ptt.cc has it from the third load on
-      s.entries = loads >= 3 ? [{ author: 'mikeeeee', title: '[測試] JJptt25' }] : [{ author: 'x', title: 'old' }];
-    } };
-    JJMobile.prototype.reloadAfterArticle.call(m, screen, mine);
-    for (var i = 0; i < 50 && timers.length; ++i) timers.shift()();
-    assert.strictEqual(loads, 3, 'loaded until the article is there, then stopped');
-    assert.ok(delays.every(function(ms) { return ms <= 100; }), 'loaded again right away, no waiting between: ' + delays);
-    // never there: loaded again and again, then left alone after POST_WAIT_MS
-    var s2 = { entries: [] }, n2 = 0;
-    var m2 = { stack: [s2], reload: function() { n2++; clock += 500; } };
-    timers = [];
-    JJMobile.prototype.reloadAfterArticle.call(m2, s2, mine);
-    for (var j = 0; j < 1000 && timers.length; ++j) timers.shift()();
-    assert.ok(!timers.length, 'still going');
-    assert.ok(n2 > 50 && n2 <= JJMobile.POST_WAIT_MS / 500 + 2, String(n2));
-    assert.ok(/reloadAfterArticle\(/.test(JJMobile.prototype.composeArticle ? JJMobile.prototype.composeArticle.toString() : fs.readFileSync(path.join(root, 'js/mobile_article.js'), 'utf8')), 'not used after 發表文章');
+    var run = function(hasItFrom) {
+      var reads = 0, draws = 0, fresh = [];
+      JJMobile.parseIndex = function(doc) { return { entries: doc }; };
+      var screen = { board: 'Test', view: { innerHTML: 'old list', scrollTop: 5 } };
+      var m = { stack: [screen],
+        listDoc: function(url, f) {
+          reads++; fresh.push(f); clock += 400;
+          assert.ok(/\/bbs\/Test\/index\.html$/.test(url), url);
+          assert.strictEqual(screen.view.innerHTML, 'old list', 'the list on screen is kept while reading');
+          return now(reads >= hasItFrom ? [{ author: 'mikeeeee', title: '[測試] JJptt25' }] : [{ author: 'x', title: 'old' }]);
+        },
+        render: function() { draws++; },
+        reload: function() { throw new Error('the list itself is not reloaded'); } };
+      JJMobile.prototype.reloadAfterArticle.call(m, screen, mine);
+      return { reads: reads, draws: draws, fresh: fresh };
+    };
+    var r = run(3);
+    assert.strictEqual(r.reads, 3, 'read until the article is there, then stopped');
+    assert.strictEqual(r.draws, 1, 'drawn once, from that page');
+    assert.ok(r.fresh.every(Boolean), 'never from the cache');
+    var r2 = run(Infinity);
+    assert.strictEqual(r2.draws, 1, 'never there: drawn after POST_WAIT_MS anyway');
+    assert.ok(r2.reads >= JJMobile.POST_WAIT_MS / 400 && r2.reads <= JJMobile.POST_WAIT_MS / 400 + 2, String(r2.reads));
+    assert.ok(/reloadAfterArticle\(/.test(fs.readFileSync(path.join(root, 'js/mobile_article.js'), 'utf8')), 'not used after 發表文章');
   } finally {
-    global.setTimeout = realSetTimeout;
+    JJMobile.parseIndex = parse;
     Date.now = realNow;
   }
 });
