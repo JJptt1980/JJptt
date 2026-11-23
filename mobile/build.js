@@ -24,6 +24,15 @@ const info = {
 fs.writeFileSync(path.join(out, 'build-info.js'), 'window.JJPTT_BUILD = ' + JSON.stringify(info) + ';\n');
 let page = fs.readFileSync(path.join(ext, 'app.html'), 'utf8');
 page = page.replace('</head>', '<script src="build-info.js"></script>\n</head>');
+// JJ Sans (Inter + Noto Sans JP, SIL OFL 1.1), only in the app: a cut-down
+// set (common Taiwan + Japan kanji, kana, PTT's bopomofo, box drawing...).
+// Characters it lacks fall back to the phone's own font. The phone UI in
+// css/main.css asks for "JJ Sans" first; the extension and the web version
+// have no such font and go on with the next in the list.
+fs.cpSync(path.join(__dirname, 'assets', 'jjsans'), path.join(out, 'jjsans'), { recursive: true });
+page = page.replace('</head>', '<style>\n' + [400, 700].map(function(w) {
+  return '@font-face { font-family: "JJ Sans"; font-weight: ' + w + '; font-style: normal; font-display: block; src: url("jjsans/jj-sans-' + w + '.woff2") format("woff2"); }';
+}).join('\n') + '\n</style>\n</head>');
 // the page runs under the status bar and the navigation bar (it paints
 // them in its own dark color; the top bar and the lists keep clear of them
 // with env(safe-area-inset-*))
