@@ -605,12 +605,23 @@ JJMobile.prototype.reloadAfterPost = function(screen, mine) {
       var top = v.scrollTop;
       v.innerHTML = '';
       self.fillArticle(screen, article);
-      var rows = v.querySelectorAll('.jjm-pushes > .jjm-push');
+      // also inside a 連推 / 連續回覆 run: several pushes in a row are drawn
+      // folded as one line, and the push just sent looked gone -- open it
+      var rows = v.querySelectorAll('.jjm-pushes .jjm-push:not(.jjm-run-row)');
       var id = String(mine.id).toLowerCase(), text = String(mine.text).slice(0, 6);
       for (var i = rows.length - 1; i >= 0 && i >= rows.length - 30; --i) {
         var who = ((rows[i].querySelector('.jjm-push-id') || {}).textContent || '').trim().toLowerCase();
         var said = (rows[i].querySelector('.jjm-push-text') || {}).textContent || '';
-        if (who === id && said.indexOf(text) >= 0) { rows[i].classList.add('jjm-push-new'); break; }
+        if (who === id && said.indexOf(text) >= 0) {
+          rows[i].classList.add('jjm-push-new');
+          var run = rows[i].closest('.jjm-run');
+          if (run && !run.classList.contains('jjm-run-open')) {
+            run.classList.add('jjm-run-open');
+            var tg = run.querySelector('.jjm-run-toggle');
+            if (tg) tg.textContent = '▾ 收起';
+          }
+          break;
+        }
       }
       if (atBottom) {
         var box2 = v.querySelector('.jjm-compose');
