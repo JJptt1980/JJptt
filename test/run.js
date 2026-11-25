@@ -655,13 +655,18 @@ test('app search: 推文數 labels (爆文, 噓爆) and the quick buttons', func
   assert.strictEqual(JJMobile.pushQueryLabel('200'), '止爆');
   assert.deepStrictEqual(JJMobile.QUICK_PUSH.map(function(q) { return q[0]; }), [20, 100, 200, -100]);
 });
-test('app 發表文章: the board page is read again right away until www.ptt.cc has the new article, then the list drawn once (it looked lost)', function() {
+test('app 發表文章 / 回文: shown on the list at once (剛送出), the board page read again until www.ptt.cc has it, then the list drawn once (it looked lost)', function() {
   var mine = { author: 'mikeeeee', title: 'JJptt25' };
   assert.ok(JJMobile.isMyArticle({ author: 'MikeEEEE', title: '[測試] JJptt25' }, mine));
   assert.ok(!JJMobile.isMyArticle({ author: 'someone', title: '[測試] JJptt25' }, mine));
   assert.ok(!JJMobile.isMyArticle({ author: 'mikeeeee', title: '[測試] 測測測試' }, mine));
-  var parse = JJMobile.parseIndex, realNow = Date.now, clock = 1000;
+  // a 回文: only the Re: one counts, not the article it answers
+  var re = { author: 'mikeeeee', title: '[測試] JJptt25', reply: true };
+  assert.ok(JJMobile.isMyArticle({ author: 'mikeeeee', title: 'Re: [測試] JJptt25' }, re));
+  assert.ok(!JJMobile.isMyArticle({ author: 'mikeeeee', title: '[測試] JJptt25' }, re));
+  var parse = JJMobile.parseIndex, realNow = Date.now, clock = 1000, realTimeout = global.setTimeout;
   Date.now = function() { return clock; };
+  global.setTimeout = function(fn, ms) { clock += ms; fn(); };  // the waits between reads, at once
   // a promise that runs its callback at once (no microtask queue to drain)
   var now = function(v) { return { then: function(ok) { return ok(v); } }; };
   try {
@@ -677,6 +682,8 @@ test('app 發表文章: the board page is read again right away until www.ptt.cc
           return now(reads >= hasItFrom ? [{ author: 'mikeeeee', title: '[測試] JJptt25' }] : [{ author: 'x', title: 'old' }]);
         },
         render: function() { draws++; },
+        showPendingArticle: function() {},
+        redrawList: JJMobile.prototype.redrawList,
         reload: function() { throw new Error('the list itself is not reloaded'); } };
       JJMobile.prototype.reloadAfterArticle.call(m, screen, mine);
       return { reads: reads, draws: draws, fresh: fresh };
@@ -687,11 +694,12 @@ test('app 發表文章: the board page is read again right away until www.ptt.cc
     assert.ok(r.fresh.every(Boolean), 'never from the cache');
     var r2 = run(Infinity);
     assert.strictEqual(r2.draws, 1, 'never there: drawn after POST_WAIT_MS anyway');
-    assert.ok(r2.reads >= JJMobile.POST_WAIT_MS / 400 && r2.reads <= JJMobile.POST_WAIT_MS / 400 + 2, String(r2.reads));
+    assert.ok(r2.reads >= JJMobile.POST_WAIT_MS / 1400 && r2.reads <= JJMobile.POST_WAIT_MS / 1400 + 2, String(r2.reads));
     assert.ok(/reloadAfterArticle\(/.test(fs.readFileSync(path.join(root, 'js/mobile_article.js'), 'utf8')), 'not used after 發表文章');
   } finally {
     JJMobile.parseIndex = parse;
     Date.now = realNow;
+    global.setTimeout = realTimeout;
   }
 });
 test('version: JJptt\'s version and the run; before that 0.0.N', function() {
